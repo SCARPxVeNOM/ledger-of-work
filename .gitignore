@@ -1,0 +1,25 @@
+node_modules/
+dist/
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+
+# spike + demo output — never commit results, receipts, or keys
+out/
+*.local.json
+result*.json
+receipt*.json
+
+# playwright
+test-results/
+playwright-report/
+.playwright/
+
+.DS_Store
+Thumbs.db
+
+# Local agent/editor tooling — not part of the product
+.claude/
+.mcp.json
+SETUP.md
