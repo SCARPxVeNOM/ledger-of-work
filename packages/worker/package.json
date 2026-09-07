@@ -1,0 +1,13 @@
+{
+  "name": "@low/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Executes multi-step jobs against live sites and meters the work performed.",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": { "build": "tsc --build" },
+  "dependencies": {
+    "@low/protocol": "workspace:*",
+    "playwright": "^1.63.0"
+  }
+}
