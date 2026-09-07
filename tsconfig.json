@@ -18,6 +18,9 @@
     },
     {
       "path": "./apps/buyer-cli"
+    },
+    {
+      "path": "./apps/mcp"
     }
   ]
 }

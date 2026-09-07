@@ -4,9 +4,15 @@
   "private": true,
   "type": "module",
   "description": "A buying agent: discover, quote, pay a 402, receive result and receipt.",
-  "scripts": { "build": "tsc --build", "start": "tsx src/main.ts" },
+  "scripts": {
+    "build": "tsc --build",
+    "start": "tsx src/main.ts"
+  },
   "dependencies": {
     "@hiero-ledger/sdk": "^2.87.0",
     "dotenv": "^17.4.2"
+  },
+  "exports": {
+    ".": "./src/index.ts"
   }
 }

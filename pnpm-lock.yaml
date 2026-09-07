@@ -39,6 +39,15 @@ importers:
         specifier: ^17.4.2
         version: 17.4.2
 
+  apps/mcp:
+    dependencies:
+      '@low/buyer-cli':
+        specifier: workspace:*
+        version: link:../buyer-cli
+      dotenv:
+        specifier: ^17.4.2
+        version: 17.4.2
+
   apps/seller:
     dependencies:
       '@low/protocol':

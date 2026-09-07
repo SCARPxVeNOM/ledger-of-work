@@ -56,7 +56,7 @@ independently verified.
 | `apps/seller` — x402 resource server | done |
 | `apps/buyer-cli` — buying agent | done |
 | `apps/verifier` — independent verification CLI | done |
-| `apps/mcp` — MCP server for buying agents | planned |
+| `apps/mcp` — MCP server for buying agents | done |
 | `apps/web` — demo UI | planned |
 | HTS token as payment asset | planned |
 
@@ -106,11 +106,27 @@ cp .env.example .env          # fill in two ECDSA testnet accounts
 
 pnpm seller                   # terminal 1
 pnpm buy --capability quotes.search_and_extract --param tag=love --param max=3
-pnpm verify --topic <id> --seq <n> --result ./result.json             --capability quotes.search_and_extract --submitter <seller account>
+pnpm verify --topic <id> --seq <n> --result ./result.json \
+  --capability quotes.search_and_extract --submitter <seller account>
 ```
 
 The verifier needs no credentials and never contacts the seller. It reads the public
 mirror node, so anyone can run it — including someone who assumes the seller is lying.
+
+### As an agent, over MCP
+
+`pnpm mcp` exposes three tools over stdio: `list_capabilities` reads the seller's
+manifest live, `quote_job` prices a job for free, and `buy_job` pays and runs it.
+`buy_job` takes a `maxTinybar` ceiling and refuses anything above it — an autonomous
+agent should not pay a price it did not expect:
+
+```
+spend limit too low -> REFUSED: quote 213000 tinybar exceeds your limit of 1000; not paying
+within limit        -> paid 213000 tinybar, receipt topic 0.0.10413059 seq 4
+```
+
+No API key and no account with the seller. The agent discovers what is for sale, decides
+whether the price is worth it, pays from its own wallet, and walks away with a receipt.
 
 ## Design notes
 
@@ -124,10 +140,9 @@ networks only. Every Hedera network offers `exact` alone. So the meter quotes fr
 plan, then settles once for a work-derived price. Calling that "upto on Hedera" would be
 wrong, and this repo doesn't.
 
-**The price is a pure function of the recorded work.** `price(work, priceBook)` takes no
-clock, no database, and no network. That is what lets an independent verifier recompute
-the charge from `receipt.work` and assert the price matches the work claimed — rather
-than taking our word for it.
+**Pricing is a pure function.** `price(work, priceBook)` takes no clock, no database and
+no network, so anyone holding the published price book can reproduce any number this
+service quotes. That reproducibility is what the verifier's meter check rests on.
 
 **The paying agent's identity can't be read off the transaction.** The scheme requires
 `transactionId.accountId == extra.feePayer`, so a settled transaction always names the

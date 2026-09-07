@@ -1,0 +1,12 @@
+{
+  "name": "@low/mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "MCP server letting any agent discover, quote and buy jobs autonomously.",
+  "scripts": { "build": "tsc --build", "start": "tsx src/main.ts" },
+  "dependencies": {
+    "@low/buyer-cli": "workspace:*",
+    "dotenv": "^17.4.2"
+  }
+}
