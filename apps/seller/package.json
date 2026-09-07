@@ -1,0 +1,16 @@
+{
+  "name": "@low/seller",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "x402-gated resource server: quote, pay, execute, publish receipt, settle.",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": { "build": "tsc --build", "start": "tsx src/main.ts" },
+  "dependencies": {
+    "@low/protocol": "workspace:*",
+    "@low/receipts": "workspace:*",
+    "@low/worker": "workspace:*",
+    "playwright": "^1.63.0",
+    "dotenv": "^17.4.2"
+  }
+}

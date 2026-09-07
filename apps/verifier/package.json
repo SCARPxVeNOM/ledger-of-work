@@ -1,0 +1,13 @@
+{
+  "name": "@low/verifier",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Independent receipt verification from public data only.",
+  "scripts": { "build": "tsc --build", "start": "tsx src/main.ts" },
+  "dependencies": {
+    "@low/protocol": "workspace:*",
+    "@low/receipts": "workspace:*",
+    "@low/worker": "workspace:*"
+  }
+}

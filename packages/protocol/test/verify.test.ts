@@ -50,6 +50,8 @@ describe("verifyReceipt — the happy path", () => {
       "payment",
       "payer",
       "meter",
+      "charge",
+      "variance",
     ]);
   });
 });
@@ -79,11 +81,27 @@ describe("verifyReceipt — a verifier that only ever passes is not evidence", (
     expect(failedIds(out)).toContain("submitter");
   });
 
-  it("goes red when the receipt claims a price its recorded work does not support", () => {
+  it("goes red when the quote does not follow the published price book", () => {
+    const out = verifyFixture({
+      receipt: { price: { unit: "tinybar", quoted: "900000", charged: "900000" } },
+    });
+    expect(failedIds(out)).toContain("meter");
+  });
+
+  it("goes red when the buyer was charged more than they were quoted", () => {
     const out = verifyFixture({
       receipt: { price: { unit: "tinybar", quoted: EXPECTED_CHARGE, charged: "900000" } },
     });
-    expect(failedIds(out)).toContain("meter");
+    expect(failedIds(out)).toContain("charge");
+  });
+
+  it("does not penalise a job whose real work diverged from the plan", () => {
+    // The plan said 6 steps, the work took 7. On `exact` the buyer still pays the quote
+    // and the seller absorbs the rest — that is not a verification failure.
+    const out = verifyFixture();
+    expect(out.ok).toBe(true);
+    const variance = out.checks.find((c) => c.id === "variance");
+    expect(variance?.detail).toMatch(/absorbed by the seller/);
   });
 
   it("goes red when the on-chain amount differs from the charge claimed", () => {

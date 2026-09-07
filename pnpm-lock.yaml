@@ -30,7 +30,55 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.20.1)
 
+  apps/buyer-cli:
+    dependencies:
+      '@hiero-ledger/sdk':
+        specifier: ^2.87.0
+        version: 2.87.0(bn.js@5.2.3)
+      dotenv:
+        specifier: ^17.4.2
+        version: 17.4.2
+
+  apps/seller:
+    dependencies:
+      '@low/protocol':
+        specifier: workspace:*
+        version: link:../../packages/protocol
+      '@low/receipts':
+        specifier: workspace:*
+        version: link:../../packages/receipts
+      '@low/worker':
+        specifier: workspace:*
+        version: link:../../packages/worker
+      dotenv:
+        specifier: ^17.4.2
+        version: 17.4.2
+      playwright:
+        specifier: ^1.63.0
+        version: 1.63.0
+
+  apps/verifier:
+    dependencies:
+      '@low/protocol':
+        specifier: workspace:*
+        version: link:../../packages/protocol
+      '@low/receipts':
+        specifier: workspace:*
+        version: link:../../packages/receipts
+      '@low/worker':
+        specifier: workspace:*
+        version: link:../../packages/worker
+
   packages/protocol: {}
+
+  packages/receipts:
+    dependencies:
+      '@hiero-ledger/sdk':
+        specifier: ^2.87.0
+        version: 2.87.0(bn.js@5.2.3)
+      '@low/protocol':
+        specifier: workspace:*
+        version: link:../protocol
 
   packages/worker:
     dependencies:

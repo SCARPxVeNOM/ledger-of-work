@@ -167,17 +167,54 @@ export function verifyReceipt(input: VerifyInput): VerifyOutput {
     add("payment", "Settlement transaction", false, "not supplied — pass one to check payment");
   }
 
-  // 7. The meter claim: the price follows from the recorded work and the published book.
+  // 7. The meter claim: the quote follows from the published price book applied to the
+  // plan, and the buyer was charged exactly what they were quoted.
+  //
+  // Checking `charged` against the *actual* work would be wrong. Hedera offers only the
+  // `exact` scheme, so the buyer signs for one definite amount before the work happens;
+  // when reality differs from the plan the seller absorbs it. What is verifiable is that
+  // the quote was computed honestly and was not inflated after the fact.
   if (input.priceBook) {
-    const recomputed = price(receipt.work, input.priceBook);
+    const quotedFromPlan = price(
+      { steps: receipt.plan.steps, pages: receipt.plan.pages, sessionMs: receipt.plan.estimatedMs },
+      input.priceBook,
+    );
+    const quoteHonest = quotedFromPlan.total.toString() === receipt.price.quoted;
+    const chargedAsQuoted = receipt.price.charged === receipt.price.quoted;
+
     add(
       "meter",
-      "Charge matches the work recorded",
-      recomputed.total.toString() === receipt.price.charged,
-      `work ${JSON.stringify(receipt.work)} prices at ${recomputed.total}, receipt charged ${receipt.price.charged}`,
+      "Quote follows the published price book",
+      quoteHonest,
+      `plan ${JSON.stringify(receipt.plan)} prices at ${quotedFromPlan.total}, receipt quoted ${receipt.price.quoted}`,
+    );
+    add(
+      "charge",
+      "Charged exactly what was quoted",
+      chargedAsQuoted,
+      chargedAsQuoted
+        ? `${receipt.price.charged} tinybar`
+        : `quoted ${receipt.price.quoted}, charged ${receipt.price.charged}`,
+    );
+
+    // Informational, not a pass/fail: it shows who absorbed the difference between the
+    // estimate and reality. A meter that never diverges is a flat fee in disguise.
+    const actual = price(receipt.work, input.priceBook);
+    const variance = actual.total - BigInt(receipt.price.charged);
+    add(
+      "variance",
+      "Work performed, priced for comparison",
+      true,
+      `actual work prices at ${actual.total}; ${
+        variance === 0n
+          ? "matches the charge exactly"
+          : variance > 0n
+            ? `${variance} tinybar more than charged, absorbed by the seller`
+            : `${-variance} tinybar less than charged, the plan overestimated`
+      }`,
     );
   } else {
-    add("meter", "Charge matches the work recorded", false, "no price book supplied");
+    add("meter", "Quote follows the published price book", false, "no price book supplied");
   }
 
   return { ok: checks.every((c) => c.ok), checks, receipt };

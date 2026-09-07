@@ -44,17 +44,73 @@ can't quietly edit history.
 
 ## Status
 
-Early. The trust core is built and tested; the worker, service, and verifier are in
-progress.
+**Working end to end on Hedera testnet.** Two real jobs have been quoted, paid for
+through the Blocky402 facilitator, executed against live sites, receipted on HCS, and
+independently verified.
 
 | Component | State |
 | --- | --- |
-| `packages/protocol` — receipt schema, canonical hashing, meter, verifier checks | **done**, 48 tests |
-| `packages/worker` — site adapters + Playwright runtime | in progress |
-| `packages/receipts` — HCS publisher + mirror-node reader | in progress |
-| `apps/seller` — x402 resource server | planned |
-| `apps/verifier` — standalone verification CLI | planned |
-| `apps/buyer-cli`, `apps/mcp`, `apps/web` | planned |
+| `packages/protocol` — receipt schema, canonical hashing, meter, verifier checks | done |
+| `packages/worker` — site adapters, Playwright runtime, work meter | done |
+| `packages/receipts` — HCS publisher + mirror-node reader | done |
+| `apps/seller` — x402 resource server | done |
+| `apps/buyer-cli` — buying agent | done |
+| `apps/verifier` — independent verification CLI | done |
+| `apps/mcp` — MCP server for buying agents | planned |
+| `apps/web` — demo UI | planned |
+| HTS token as payment asset | planned |
+
+107 tests, none of which touch the network.
+
+## Evidence
+
+Receipts topic: [`0.0.10413059`](https://hashscan.io/testnet/topic/0.0.10413059)
+
+Two jobs against the same capability, differing only in size:
+
+| Job | Steps | Pages | Charged |
+| --- | --- | --- | --- |
+| 3 quotes tagged "love" | 3 | 1 | 312,000 tinybar |
+| 100 quotes, unfiltered | 12 | 10 | 1,572,000 tinybar |
+
+A 5x price difference for 4x the work, settled exactly, on chain. That spread is the
+whole argument for pay-per-job over pay-per-call.
+
+Verifying the first one, from public data only:
+
+```
+PASS  Receipt message present and unchunked
+PASS  Submitted by the expected service account
+PASS  Receipt parses at a known schema version
+PASS  Result matches the recorded hash
+PASS  Consensus timestamp is coherent with the claimed finish   1792ms after finishedAt
+PASS  Settlement succeeded for exactly the charged amount       312000 tinybar to 0.0.10410493
+PASS  Named paying agent is a net sender in the transaction     0.0.10410543 debited
+PASS  Quote follows the published price book
+PASS  Charged exactly what was quoted
+PASS  Work performed, priced for comparison                     matches the charge exactly
+
+VERIFIED — 10/10 checks passed
+```
+
+Change one character of the result and the fourth check goes red while the rest stay
+green — which is what makes it evidence rather than decoration. The verifier exits
+non-zero on failure.
+
+## Try it
+
+```bash
+pnpm install
+pnpm exec playwright install chromium
+cp .env.example .env          # fill in two ECDSA testnet accounts
+
+pnpm seller                   # terminal 1
+pnpm buy --capability quotes.search_and_extract --param tag=love --param max=3
+pnpm verify --topic <id> --seq <n> --result ./result.json             --capability quotes.search_and_extract --submitter <seller account>
+```
+
+The verifier needs no credentials and never contacts the seller. It reads the public
+mirror node, so anyone can run it — including someone who assumes the seller is lying.
 
 ## Design notes
 
@@ -79,6 +135,15 @@ than taking our word for it.
 the buyer in some implementations and the fee payer in others. The buyer is captured from
 `/verify` before settling and cross-checked against the transaction's net sender on the
 mirror node.
+
+**The verifier checks the quote, not the bill.** Because `exact` is the only scheme
+available, the buyer signs for one definite amount *before* the work happens, and the
+seller absorbs the difference when reality diverges from the plan. So the receipt records
+the plan and the actual work side by side, and the verifier checks that the *quote*
+followed the published price book — not that the charge equals the price of the work
+performed. Checking the latter would fail every honest job where the estimate was
+imperfect, which is most of them. The variance is reported so the absorption is visible
+rather than something the seller can quietly pocket.
 
 **Receipts fit in one HCS chunk.** Messages over 1024 bytes are split across
 transactions, and the mirror node REST API does not reassemble them. A size assertion

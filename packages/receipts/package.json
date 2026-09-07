@@ -1,0 +1,13 @@
+{
+  "name": "@low/receipts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Publishes delivery receipts to HCS and reads them back through the public mirror node.",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": { "build": "tsc --build" },
+  "dependencies": {
+    "@low/protocol": "workspace:*",
+    "@hiero-ledger/sdk": "^2.87.0"
+  }
+}

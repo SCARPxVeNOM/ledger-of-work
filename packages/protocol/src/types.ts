@@ -73,6 +73,17 @@ export interface Receipt {
   /** ISO 8601, millisecond precision. */
   startedAt: string;
   finishedAt: string;
+  /**
+   * The work the quote was priced from.
+   *
+   * Recorded because `exact` settlement means the buyer pays the quoted amount and no
+   * other — so the checkable claim is "the quote followed the published price book",
+   * not "the charge equals the price of the work performed". Without the plan, a
+   * verifier recomputing from `work` alone would flag every job where reality differed
+   * from the estimate, which is most of them.
+   */
+  plan: { steps: number; pages: number; estimatedMs: number };
+  /** What the worker actually did. Compare against `plan` to see the variance absorbed. */
   work: Omit<StepLog, "sources">;
   price: {
     unit: "tinybar";

@@ -6,6 +6,18 @@
     },
     {
       "path": "./packages/worker"
+    },
+    {
+      "path": "./packages/receipts"
+    },
+    {
+      "path": "./apps/seller"
+    },
+    {
+      "path": "./apps/verifier"
+    },
+    {
+      "path": "./apps/buyer-cli"
     }
   ]
 }

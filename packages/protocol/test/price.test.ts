@@ -1,15 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { price, priceTinybars } from "../src/price.js";
-import { EXPECTED_CHARGE, PRICE_BOOK } from "./fixtures.js";
+import { PRICE_BOOK } from "./fixtures.js";
 
 describe("the meter", () => {
-  it("prices the worked example the way the published book says", () => {
+  it("prices a worked example the way the published book says", () => {
+    // Deliberately independent of the receipt fixture: that one prices a *plan*, this
+    // prices actual work, and tying them together once hid a real discrepancy.
     const b = price({ steps: 7, pages: 2, sessionMs: 6768 }, PRICE_BOOK);
     expect(b.base).toBe(50_000n);
     expect(b.steps).toBe(70_000n);
     expect(b.pages).toBe(50_000n);
     expect(b.seconds).toBe(14_000n); // ceil(6.768) = 7 seconds
-    expect(b.total.toString()).toBe(EXPECTED_CHARGE);
+    expect(b.total).toBe(184_000n);
   });
 
   it("is deterministic — the same work always prices the same", () => {

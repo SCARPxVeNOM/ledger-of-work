@@ -16,7 +16,11 @@
     "typecheck": "tsc --build",
     "spike:supported": "node scripts/supported.mjs",
     "spike:pay": "node scripts/spike-pay.mjs",
-    "spike:hcs": "node scripts/spike-hcs.mjs"
+    "spike:hcs": "node scripts/spike-hcs.mjs",
+    "seller": "tsx apps/seller/src/main.ts",
+    "buy": "tsx apps/buyer-cli/src/main.ts",
+    "verify": "tsx apps/verifier/src/main.ts",
+    "smoke:worker": "tsx scripts/smoke-worker.mjs"
   },
   "devDependencies": {
     "@hiero-ledger/sdk": "^2.87.0",

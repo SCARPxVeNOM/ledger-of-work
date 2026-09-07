@@ -26,9 +26,11 @@ export const RESULT = {
 };
 
 const WORK = { steps: 7, pages: 2, sessionMs: 6768 };
+/** What the quote was priced from. Reality came in one step over — absorbed by the seller. */
+const PLAN = { steps: 6, pages: 2, estimatedMs: 6000 };
 
-/** base + 7 steps + 2 pages + ceil(6.768s) => 50000 + 70000 + 50000 + 14000 */
-export const EXPECTED_CHARGE = "184000";
+/** plan: base 50000 + 6*10000 + 2*25000 + 6s*2000 => 50000+60000+50000+12000 */
+export const EXPECTED_CHARGE = "172000";
 
 export function makeReceipt(overrides: Partial<Receipt> = {}): Receipt {
   return {
@@ -40,6 +42,7 @@ export function makeReceipt(overrides: Partial<Receipt> = {}): Receipt {
     sources: ["https://quotes.toscrape.com/tag/love/", "https://quotes.toscrape.com/tag/love/page/2/"],
     startedAt: "2026-09-08T04:12:03.114Z",
     finishedAt: "2026-09-08T04:12:09.882Z",
+    plan: PLAN,
     work: WORK,
     price: { unit: "tinybar", quoted: EXPECTED_CHARGE, charged: EXPECTED_CHARGE },
     payment: {
