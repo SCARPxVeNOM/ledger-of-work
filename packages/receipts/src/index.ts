@@ -29,3 +29,13 @@ export {
   summariseUsage,
   type UsageReport,
 } from "./usage.js";
+export {
+  FEEDBACK_VERSION,
+  FeedbackTooLargeError,
+  buildFeedback,
+  feedbackBytes,
+  formatFeedback,
+  readFeedback,
+  type Feedback,
+  type FeedbackEntry,
+} from "./feedback.js";

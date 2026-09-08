@@ -90,13 +90,30 @@ Written down in advance so the answers are not shaped after the fact.
 - Would you rather pay per job or hold a prepaid balance? Why?
 - Is the price too high, too low, or unknowable?
 
-## Not built yet, deliberately
+## The feedback path (built)
 
-A feedback topic with a `pnpm feedback` command and a form in the demo. It is a small
-piece of work and the design mirrors the receipt path exactly. It is listed here rather
-than half-built, because an empty feedback topic is not evidence of anything, and
-building the collection mechanism before having anyone to collect from is the wrong
-order.
+Topic [`0.0.10426203`](https://hashscan.io/testnet/topic/0.0.10426203), created with
+**no submit key**. That is the design decision that matters: anyone with a Hedera account
+posts directly, so an entry is attributable to *their* account and we cannot edit it,
+drop it, or be its only author.
+
+```bash
+pnpm feedback post --from "your name" --capability virgo.catalogue_search   --price-clear no --verified yes --notes "..."
+pnpm feedback read
+```
+
+`read` marks anything from an account the project controls as `[self-reported]` and
+excludes it from the external count — checked against *every* project account, not just
+the seller's. The first entry was posted from the buyer account and briefly counted as
+external until that was fixed, which is exactly the flattering mistake the flag exists to
+prevent.
+
+Current state: **1 entry, 0 from accounts the project does not control.** An empty topic
+and a topic with one self-labelled test entry are both honest; a topic with one
+flattering anonymous entry would not be.
+
+[`OUTREACH.md`](OUTREACH.md) has the ask, where to send it, and the questions — written
+down before any answers arrive so they are not shaped by what people happen to say.
 
 ## Reproducing the figures
 
