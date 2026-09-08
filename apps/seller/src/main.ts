@@ -30,12 +30,16 @@ const seller = await startSeller({
   sellerPrivateKey: required("SELLER_PRIVATE_KEY"),
   topicId: required("SELLER_TOPIC_ID"),
   paymentToken,
+  agentCardFileId: process.env.AGENT_CARD_FILE_ID,
 });
 
 console.log(`seller listening on http://localhost:${seller.port}`);
 console.log(`  manifest   http://localhost:${seller.port}/`);
 console.log(`  fee payer  ${seller.feePayer}`);
 console.log(`  receipts   https://hashscan.io/testnet/topic/${process.env.SELLER_TOPIC_ID}`);
+if (process.env.AGENT_CARD_FILE_ID) {
+  console.log(`  card       https://hashscan.io/testnet/file/${process.env.AGENT_CARD_FILE_ID}`);
+}
 console.log(
   `  assets     HBAR${paymentToken ? ` + ${paymentToken.symbol} (${paymentToken.id}) at ${paymentToken.unitsPerTinybar} units/tinybar` : ""}`,
 );

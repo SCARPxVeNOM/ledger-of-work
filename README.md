@@ -59,6 +59,7 @@ independently verified.
 | `apps/mcp` — MCP server for buying agents | done |
 | `apps/web` — demo UI | done |
 | HTS token as payment asset | done |
+| Agent card on Hedera File Service | done |
 
 107 tests, none of which touch the network.
 
@@ -164,6 +165,14 @@ followed the published price book — not that the charge equals the price of th
 performed. Checking the latter would fail every honest job where the estimate was
 imperfect, which is most of them. The variance is reported so the absorption is visible
 rather than something the seller can quietly pocket.
+
+**The catalogue is published on chain, not just served.** The manifest also lives in a
+Hedera File Service file, so a buyer can check the price book they were quoted against
+the one the seller committed to publicly. Reading it from the same server that produced
+the receipt would be circular — a seller could quote against one price book and verify
+against another. Caveat worth stating: HFS file *contents* are not exposed over the
+mirror REST API, so reading the card needs an account, while the receipt path stays
+keyless.
 
 **Prices are metered in tinybars and converted at a published rate.** The price book is
 denominated in tinybars whatever the buyer pays in; a non-HBAR asset declares its own

@@ -16,6 +16,8 @@ export interface SellerConfig {
   sellerPrivateKey: string;
   topicId: string;
   publicUrl?: string;
+  /** HFS file holding this manifest, so a buyer can check it without trusting us. */
+  agentCardFileId?: string | undefined;
   /** Optional HTS asset a buyer may pay in instead of HBAR. */
   paymentToken?: AssetSpec | undefined;
 }
@@ -79,6 +81,16 @@ export async function startSeller(config: SellerConfig) {
             : "HTS token — payTo must have associated it",
       })),
     },
+    ...(config.agentCardFileId
+      ? {
+          agentCard: {
+            fileId: config.agentCardFileId,
+            service: "hedera-file-service",
+            explorer: `https://hashscan.io/testnet/file/${config.agentCardFileId}`,
+            note: "the same catalogue and price books, committed on chain — check the prices you were quoted against it",
+          },
+        }
+      : {}),
     receipts: {
       topicId: config.topicId,
       submitter: config.sellerAccountId,
