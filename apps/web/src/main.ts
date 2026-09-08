@@ -3,16 +3,18 @@ import { readFileSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildPayment, type PaymentRequirements } from "@low/buyer-cli";
+import type { PaymentRequirements } from "@low/buyer-cli";
 import { verifyFromMirror } from "@low/receipts";
 import { CATALOGUE } from "@low/worker";
 
 /**
  * Demo server for the browser UI.
  *
- * The buyer's key lives here rather than in the page: a demo that put a private key in
- * client-side JavaScript would be teaching the wrong lesson, however convenient. The
- * page drives the flow; this process signs.
+ * It holds no keys. Signing happens in the buyer's own wallet process (`pnpm wallet`),
+ * which this calls over loopback with a shared secret — so the thing rendering the
+ * seller's UI is not also the custodian of the buyer's funds, and a compromise of this
+ * frontend cannot spend anything. The wallet enforces its own spend policy that this
+ * process cannot raise.
  *
  * Everything else the page needs — the live meter and the verification — it reads
  * directly. The meter comes from the seller's SSE stream, and the verifier runs against
@@ -22,6 +24,32 @@ import { CATALOGUE } from "@low/worker";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SELLER = process.env.SELLER_URL ?? "http://localhost:8402";
 const PORT = Number(process.env.WEB_PORT ?? 8403);
+const WALLET = process.env.WALLET_URL ?? "http://127.0.0.1:8404";
+const WALLET_TOKEN = process.env.WALLET_TOKEN;
+
+/** Ask the buyer's wallet to sign. The key never enters this process. */
+async function signWithWallet(requirements: PaymentRequirements): Promise<string> {
+  let res: Response;
+  try {
+    res = await fetch(`${WALLET}/sign`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        ...(WALLET_TOKEN ? { authorization: `Bearer ${WALLET_TOKEN}` } : {}),
+      },
+      body: JSON.stringify({ requirements }),
+    });
+  } catch {
+    throw new Error(`no wallet at ${WALLET} — start it with \`pnpm wallet\``);
+  }
+  const body = (await res.json()) as { header?: string; message?: string; error?: string };
+  if (!res.ok || !body.header) {
+    // A refusal is the wallet doing its job, so surface its reason rather than a generic
+    // failure — "over the per-payment limit" is actionable, "payment failed" is not.
+    throw new Error(body.message ?? body.error ?? `wallet returned ${res.status}`);
+  }
+  return body.header;
+}
 
 function env(name: string): string {
   const v = process.env[name];
@@ -59,6 +87,16 @@ const server = createServer(async (req, res) => {
     }
 
     // Capability catalogue, so the form is built from the real specs.
+    // Lets the page tell the operator the wallet is missing before they try to pay.
+    if (path === "/api/wallet") {
+      try {
+        const w = await fetch(`${WALLET}/health`).then((r) => r.json());
+        return send(res, 200, { connected: true, ...(w as object) });
+      } catch {
+        return send(res, 200, { connected: false, url: WALLET });
+      }
+    }
+
     if (path === "/api/capabilities") {
       const manifest = await fetch(`${SELLER}/`).then((r) => r.json());
       return send(res, 200, manifest);
@@ -89,11 +127,7 @@ const server = createServer(async (req, res) => {
       }
       const { accepts } = (await challenge.json()) as { accepts: PaymentRequirements[] };
 
-      const header = await buildPayment(accepts[0] as PaymentRequirements, {
-        accountId: env("BUYER_ACCOUNT_ID"),
-        privateKey: env("BUYER_PRIVATE_KEY"),
-        network: process.env.HEDERA_NETWORK ?? "testnet",
-      });
+      const header = await signWithWallet(accepts[0] as PaymentRequirements);
 
       const paid = await fetch(runUrl, { method: "POST", headers: { "payment-signature": header } });
       return send(res, paid.status, await paid.json());

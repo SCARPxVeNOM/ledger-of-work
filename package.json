@@ -23,7 +23,8 @@
     "smoke:worker": "tsx scripts/smoke-worker.mjs",
     "mcp": "tsx apps/mcp/src/main.ts",
     "web": "tsx apps/web/src/main.ts",
-    "demo": "tsx apps/seller/src/main.ts & tsx apps/web/src/main.ts"
+    "demo": "tsx apps/seller/src/main.ts & tsx apps/web/src/main.ts",
+    "wallet": "tsx apps/wallet/src/main.ts"
   },
   "devDependencies": {
     "@hiero-ledger/sdk": "^2.87.0",

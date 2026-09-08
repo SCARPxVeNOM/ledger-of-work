@@ -23,7 +23,8 @@ Then, in two terminals:
 
 ```bash
 pnpm seller     # :8402
-pnpm web        # :8403
+pnpm wallet     # :8404 — holds the buyer's key
+pnpm web        # :8403 — holds no keys
 ```
 
 Sanity check before you present: `curl -s localhost:8402/health` should report the
@@ -171,8 +172,9 @@ successes proves nothing.
 ## Known limits — say these before a judge finds them
 
 - Quotes are held in memory, so a seller restart drops open ones.
-- The demo server holds the buyer's key. A real buyer would sign in their own wallet;
-  putting a private key in browser JavaScript would have been the wrong lesson.
+- The buyer's key is in `apps/wallet`, a separate process the buyer controls, with its
+  own spend policy. Stop it and the web server cannot pay at all. WalletConnect signing
+  for a human buyer plugs into the same seam but is not implemented — say so if asked.
 - Two capabilities run against sandboxes built for scraping; the third runs against a
   real .gov site. govinfo has its own API, so it proves "not a fetch" rather than "no
   API" — see the note above.

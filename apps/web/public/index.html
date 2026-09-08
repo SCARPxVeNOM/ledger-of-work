@@ -322,6 +322,7 @@ footer {
     <span>Receipts topic <b><a id="m-topic" target="_blank" rel="noopener">—</a></b></span>
     <span>Facilitator <b id="m-fac">—</b></span>
     <span id="m-card-wrap" hidden>Agent card <b><a id="m-card" target="_blank" rel="noopener">—</a></b></span>
+    <span>Wallet <b id="m-wallet">checking…</b></span>
   </div>
 </header>
 
@@ -446,6 +447,19 @@ async function boot() {
     $("m-card-wrap").hidden = false;
     $("m-card").textContent = manifest.agentCard.fileId;
     $("m-card").href = manifest.agentCard.explorer;
+  }
+
+  // The buyer's key lives in a separate wallet process. Say so, and say plainly when it
+  // is absent — "payment failed" at the moment of paying is a worse way to find out.
+  try {
+    const w = await fetch("/api/wallet").then((r) => r.json());
+    $("m-wallet").textContent = w.connected ? `${w.accountId} (own process)` : "not running";
+    $("m-wallet").style.color = w.connected ? "" : "var(--red)";
+    if (!w.connected) {
+      $("err").textContent = `No wallet at ${w.url}. Start it with \`pnpm wallet\` — this page holds no keys and cannot pay without it.`;
+    }
+  } catch {
+    $("m-wallet").textContent = "unknown";
   }
 
   const sel = $("cap");

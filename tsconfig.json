@@ -24,6 +24,9 @@
     },
     {
       "path": "./apps/web"
+    },
+    {
+      "path": "./apps/wallet"
     }
   ]
 }

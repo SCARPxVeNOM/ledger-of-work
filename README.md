@@ -57,6 +57,7 @@ independently verified.
 | `apps/seller` — x402 resource server | done |
 | `apps/buyer-cli` — buying agent | done |
 | `apps/verifier` — independent verification CLI | done |
+| `apps/wallet` — the buyer's wallet as its own process | done |
 | `apps/mcp` — MCP server for buying agents | done |
 | `apps/web` — demo UI | done |
 | HTS token as payment asset | done |
@@ -147,6 +148,7 @@ pnpm exec playwright install chromium
 cp .env.example .env          # fill in two ECDSA testnet accounts
 
 pnpm seller                   # terminal 1
+pnpm wallet                   # terminal 2 — holds the buyer's key
 pnpm buy --capability quotes.search_and_extract --param tag=love --param max=3
 pnpm verify --topic <id> --seq <n> --result ./result.json \
   --capability quotes.search_and_extract --submitter <seller account>
@@ -234,6 +236,23 @@ lands.
 **Receipts fit in one HCS chunk.** Messages over 1024 bytes are split across
 transactions, and the mirror node REST API does not reassemble them. A size assertion
 keeps receipts under the limit so any reader stays simple.
+
+**The buyer's key lives in the buyer's wallet, not in the app.** `apps/wallet` is a
+separate process holding the only copy of `BUYER_PRIVATE_KEY`. The demo web server calls
+it over loopback with a shared secret and never sees the key, so the thing rendering the
+seller's UI is not also the custodian of your funds — stop the wallet and the web server
+is simply incapable of spending. The wallet enforces a policy the caller cannot raise:
+per-payment ceiling, total budget, allowed assets, allowed recipients. Default is HBAR
+only, and a token has to be listed explicitly.
+
+That is the realistic shape for this product's actual user: a buying agent has its own
+wallet and does not hand its key to every service it shops at. For a **human** buyer the
+same boundary is served by WalletConnect and a phone —
+[`@hashgraph/hedera-wallet-connect`](https://www.npmjs.com/package/@hashgraph/hedera-wallet-connect)
+drops into the same `sign(requirements) -> header` seam that `signWithWallet` uses in
+`apps/web/src/main.ts`. That path is **not implemented or tested here**: it needs a
+WalletConnect project id and a real wallet to exercise, and shipping browser signing code
+that has never signed anything would be worse than saying so.
 
 **Canonical JSON, or verification is a coin flip.** `JSON.stringify` serialises keys in
 insertion order, so two encoders can agree on a value and disagree on its hash. Both

@@ -1,0 +1,14 @@
+{
+  "name": "@low/wallet",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The buyer's wallet as its own process: holds the key, enforces a spend policy, signs x402 payments.",
+  "exports": { ".": "./src/policy.ts" },
+  "scripts": { "build": "tsc --build", "start": "tsx src/main.ts" },
+  "dependencies": {
+    "@low/buyer-cli": "workspace:*",
+    "@low/protocol": "workspace:*",
+    "dotenv": "^17.4.2"
+  }
+}
