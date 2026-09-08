@@ -1,5 +1,6 @@
 import { booksAdapter } from "./adapters/books.js";
 import { govinfoAdapter } from "./adapters/govinfo.js";
+import { virgoAdapter } from "./adapters/virgo.js";
 import { quotesAdapter } from "./adapters/quotes.js";
 import type { SiteAdapter } from "./types.js";
 
@@ -33,6 +34,12 @@ export {
   type GovinfoParams,
 } from "./adapters/govinfo.js";
 export {
+  parseHitText,
+  virgoAdapter,
+  type CatalogueRecord,
+  type VirgoParams,
+} from "./adapters/virgo.js";
+export {
   parseQuotes,
   quotesAdapter,
   type Quote,
@@ -51,6 +58,7 @@ export const CATALOGUE: Record<string, SiteAdapter<any, any>> = {
   [quotesAdapter.spec.name]: quotesAdapter,
   [booksAdapter.spec.name]: booksAdapter,
   [govinfoAdapter.spec.name]: govinfoAdapter,
+  [virgoAdapter.spec.name]: virgoAdapter,
 };
 
 export function getCapability(name: string) {

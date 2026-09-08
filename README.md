@@ -52,7 +52,7 @@ independently verified.
 | --- | --- |
 | `packages/protocol` — receipt schema, canonical hashing, meter, verifier checks | done |
 | `packages/worker` — site adapters, Playwright runtime, work meter | done |
-| Real-site adapter (govinfo.gov Federal Register) | done |
+| Real-site adapters (govinfo.gov, UVa Library Virgo) | done |
 | `packages/receipts` — HCS publisher + mirror-node reader | done |
 | `apps/seller` — x402 resource server | done |
 | `apps/buyer-cli` — buying agent | done |
@@ -83,6 +83,38 @@ The same job also settles in an HTS token ([`0.0.10416991`](https://hashscan.io/
 "WORK", 2 decimals) at a published rate of 0.001 units per tinybar — so the 312,000-tinybar
 quote becomes 3.12 WORK. An agent holding a stablecoin should not have to hold the
 network's native asset to buy anything.
+
+### A real site with no API at all
+
+`virgo.catalogue_search` searches the University of Virginia Library catalogue. It is the
+only site in [`scripts/survey-sites.mjs`](scripts/survey-sites.mjs) that satisfies the
+whole pitch on its own — run it yourself:
+
+```
+site                          fetchable  crawlable  apiless
+quotes.toscrape.com           yes        yes        no       <- has /api/quotes
+books.toscrape.com            yes        yes        yes
+govinfo.gov                   no         yes        no       <- has api.govinfo.gov
+search.lib.virginia.edu       no         yes        yes      <- both
+congress.gov                  no         no         no
+leginfo.legislature.ca.gov    yes        no         yes      <- Disallow: /
+www.gutenberg.org             yes        no         no
+```
+
+A plain GET of a Virgo search returns a 2,198-byte application shell with no results in
+it, nothing answers at `/catalog.json`, `/api/search`, `?format=json` or
+`/opensearch.xml`, and the site serves no robots.txt at all. Results load by a
+**"Load More Results"** button rather than by URL, so reaching the fortieth record
+genuinely requires clicking — there is no page-2 address to fetch.
+
+The survey is worth running before you trust that table. Its first version reported
+govinfo as API-less, because Node's fetch fails on `api.govinfo.gov` where curl succeeds
+and the code recorded that connection failure as evidence of absence. It now distinguishes
+"checked and absent" from "could not check", and falls back to curl.
+
+That survey also corrected something this README used to claim: `quotes.toscrape.com`
+does have a JSON API at `/api/quotes`, so the login flow demonstrates "not a fetch" but
+not "no API".
 
 ### A real site, not just a sandbox
 
