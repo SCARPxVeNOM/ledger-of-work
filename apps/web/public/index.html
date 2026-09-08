@@ -321,6 +321,7 @@ footer {
     <span>Scheme <b>exact</b></span>
     <span>Receipts topic <b><a id="m-topic" target="_blank" rel="noopener">—</a></b></span>
     <span>Facilitator <b id="m-fac">—</b></span>
+    <span id="m-card-wrap" hidden>Agent card <b><a id="m-card" target="_blank" rel="noopener">—</a></b></span>
   </div>
 </header>
 
@@ -331,6 +332,9 @@ footer {
 
     <label for="cap">Capability</label>
     <select id="cap"></select>
+
+    <label for="asset">Pay in</label>
+    <select id="asset"></select>
     <div id="cap-desc" style="font-size:11.5px;color:var(--ink-faint);margin-top:7px;min-height:32px"></div>
 
     <div id="fields"></div>
@@ -339,7 +343,7 @@ footer {
 
     <div class="ticket" id="ticket">
       <div style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft)">Quoted price</div>
-      <div class="amt"><span id="q-amt">0</span> <small>tinybar</small></div>
+      <div class="amt"><span id="q-amt">0</span> <small id="q-unit">tinybar</small></div>
       <div style="font-size:11.5px;color:var(--ink-soft);margin-top:6px">
         priced from <b id="q-steps">0</b> steps · <b id="q-pages">0</b> pages
       </div>
@@ -359,7 +363,7 @@ footer {
       <div id="lines"><div class="idle">No job running. Order one to watch the meter.</div></div>
       <div class="meter-big">
         <span class="v" id="m-run">0</span>
-        <span class="u">tinybar<br />running</span>
+        <span class="u" id="m-unit">tinybar<br />running</span>
       </div>
     </div>
     <div class="roll-edge"></div>
@@ -430,6 +434,20 @@ async function boot() {
   t.textContent = manifest.receipts.topicId;
   t.href = manifest.receipts.explorer;
 
+  const assetSel = $("asset");
+  for (const a of manifest.payment.assets ?? [{ asset: "0.0.0", symbol: "HBAR" }]) {
+    const o = document.createElement("option");
+    o.value = a.asset;
+    o.textContent = a.asset === "0.0.0" ? `${a.symbol} (native)` : `${a.symbol} — ${a.asset}`;
+    assetSel.append(o);
+  }
+
+  if (manifest.agentCard) {
+    $("m-card-wrap").hidden = false;
+    $("m-card").textContent = manifest.agentCard.fileId;
+    $("m-card").href = manifest.agentCard.explorer;
+  }
+
   const sel = $("cap");
   for (const c of manifest.capabilities) {
     const o = document.createElement("option");
@@ -499,13 +517,21 @@ $("btn-quote").onclick = async () => {
     const res = await fetch("/api/quote", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ capability: $("cap").value, params: readParams() }),
+      body: JSON.stringify({
+        capability: $("cap").value,
+        params: readParams(),
+        asset: $("asset").value,
+      }),
     });
     const q = await res.json();
     if (!res.ok) throw new Error(q.message || q.error || "quote failed");
 
     quote = q;
-    $("q-amt").textContent = fmt(q.price.amount);
+    // Show what the buyer will actually sign for. Quoting in tinybars but settling in a
+    // token would be a confusing thing to put in front of someone about to pay.
+    const payingInToken = q.price.asset && q.price.asset !== "0.0.0";
+    $("q-amt").textContent = fmt(payingInToken ? q.price.assetAmount : q.price.amount);
+    $("q-unit").textContent = payingInToken ? q.price.assetSymbol : "tinybar";
     $("q-steps").textContent = q.plan.steps;
     $("q-pages").textContent = q.plan.pages;
     $("q-outline").innerHTML = "";
@@ -533,6 +559,7 @@ $("btn-run").onclick = async () => {
   $("note").classList.remove("on");
   $("lines").innerHTML = "";
   $("m-run").textContent = "0";
+  $("m-unit").innerHTML = "tinybar<br />metered";
   tampered = false;
 
   const book = quote.price.priceBook;
@@ -574,8 +601,16 @@ $("btn-run").onclick = async () => {
     if (!res.ok) throw new Error(body.message || body.error || "job failed");
 
     lastRun = { result: body.result, receipt: body.receipt, capability: quote.capability, body };
-    addTotal(body.price.charged);
+    const settledUnit = body.price.unit ?? "tinybar";
+    const metered = body.price.meteredTinybar;
+    // When the buyer paid in a token the meter figure and the settled figure are in
+    // different denominations; showing only one of them invites the wrong reading.
+    if (metered && metered !== body.price.charged) {
+      addTotal(metered, "tinybar metered");
+    }
+    addTotal(body.price.charged, `${settledUnit} charged`);
     $("m-run").textContent = fmt(body.price.charged);
+    $("m-unit").innerHTML = `${settledUnit}<br />charged`;
     showReceipt(body);
   } catch (e) {
     $("err").textContent = e.message;
@@ -596,10 +631,10 @@ function addLine(n, what, running) {
   $("lines").append(el);
 }
 
-function addTotal(charged) {
+function addTotal(charged, unit) {
   const el = document.createElement("div");
   el.className = "line total";
-  el.innerHTML = `<span class="n"></span><span class="what">Charged</span>
+  el.innerHTML = `<span class="n"></span><span class="what">${unit}</span>
                   <span class="cost">${fmt(charged)}</span>`;
   $("lines").append(el);
 }
@@ -610,8 +645,9 @@ function showReceipt(b) {
   $("r-seq").textContent = b.receipt.sequenceNumber;
   $("r-plan").textContent = `${b.plan.steps} steps, ${b.plan.pages} pages`;
   $("r-work").textContent = `${b.work.steps} steps, ${b.work.pages} pages, ${b.work.sessionMs} ms`;
-  $("r-quoted").textContent = `${fmt(b.price.quoted)} tinybar`;
-  $("r-charged").textContent = `${fmt(b.price.charged)} tinybar`;
+  const unit = b.price.unit ?? "tinybar";
+  $("r-quoted").textContent = `${fmt(b.price.quoted)} ${unit}`;
+  $("r-charged").textContent = `${fmt(b.price.charged)} ${unit}`;
   $("r-payer").textContent = b.payment.payer;
   $("r-items").textContent = (b.result.items || []).length;
   $("r-hash").textContent = "computed at verification";

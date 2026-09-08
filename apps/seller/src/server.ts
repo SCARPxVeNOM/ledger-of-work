@@ -188,6 +188,7 @@ export async function startSeller(config: SellerConfig) {
         params,
         plan: { steps: plan.steps, pages: plan.pages, outline: plan.outline },
         price: {
+          /** The meter always counts in tinybars; `assetAmount` is what gets signed. */
           unit: "tinybar",
           amount,
           asset: asset.id,
@@ -309,9 +310,14 @@ export async function startSeller(config: SellerConfig) {
           result: outcome.result,
           receipt: receiptBlock,
           price: {
-            unit: "tinybar",
+            // The denomination actually settled, not the one the meter counts in. These
+            // differ whenever the buyer paid in a token, and labelling a WORK amount
+            // "tinybar" is the kind of small lie that makes a receipt untrustworthy.
+            unit: outcome.receipt.price.unit,
             quoted: outcome.receipt.price.quoted,
             charged: outcome.receipt.price.charged,
+            /** What the meter counted, before conversion — always tinybars. */
+            meteredTinybar: quote.amount,
           },
           plan: outcome.receipt.plan,
           work: outcome.receipt.work,
