@@ -73,7 +73,7 @@ problems, and each one shows up as a distinct paying account in `pnpm usage`.
 Feedback that lands in a private doc is indistinguishable from feedback that never
 happened. The same tamper-evident argument used for receipts applies here — publish
 structured feedback to its own topic, separate from receipts, so the record of criticism
-is as unfalsifiable as the record of usage. See "not built yet" below.
+is as unfalsifiable as the record of usage. Built; see "The feedback path" below.
 
 **4. Watch the one number that matters.**
 Distinct paying accounts. Jobs run is easy to inflate by running jobs; distinct accounts
@@ -98,7 +98,8 @@ posts directly, so an entry is attributable to *their* account and we cannot edi
 drop it, or be its only author.
 
 ```bash
-pnpm feedback post --from "your name" --capability virgo.catalogue_search   --price-clear no --verified yes --notes "..."
+pnpm feedback post --from "your name" --capability virgo.catalogue_search \
+  --price-clear no --verified yes --notes "..."
 pnpm feedback read
 ```
 

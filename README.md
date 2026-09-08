@@ -301,12 +301,18 @@ only, and a token has to be listed explicitly.
 
 That is the realistic shape for this product's actual user: a buying agent has its own
 wallet and does not hand its key to every service it shops at. For a **human** buyer the
-same boundary is served by WalletConnect and a phone —
-[`@hashgraph/hedera-wallet-connect`](https://www.npmjs.com/package/@hashgraph/hedera-wallet-connect)
-drops into the same `sign(requirements) -> header` seam that `signWithWallet` uses in
-`apps/web/src/main.ts`. That path is **not implemented or tested here**: it needs a
-WalletConnect project id and a real wallet to exercise, and shipping browser signing code
-that has never signed anything would be worse than saying so.
+same boundary is WalletConnect and a phone.
+
+The half of that which does not need a wallet is built and verified —
+`buildUnsignedPayment` and `payloadFromSignedBytes` construct the transaction a wallet
+would sign and wrap what it returns, with the fee-payer rule asserted on both sides. A
+real quote, a real 402 and a real settlement have gone through that path with a local
+signature standing in for the wallet (receipt seq 15). The WalletConnect round trip
+itself is **not implemented**, because it needs a project id and a real wallet to
+exercise even once, and shipping unexercised signing code into the path that spends a
+user's money would be worse than saying so. See
+[`docs/WALLETCONNECT.md`](docs/WALLETCONNECT.md) for the seam and what finishing it
+takes.
 
 **Canonical JSON, or verification is a coin flip.** `JSON.stringify` serialises keys in
 insertion order, so two encoders can agree on a value and disagree on its hash. Both
