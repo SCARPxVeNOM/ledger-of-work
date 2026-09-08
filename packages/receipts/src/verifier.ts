@@ -2,6 +2,7 @@ import {
   toRestTxId,
   verifyReceipt,
   type CheckResult,
+  type AssetSpec,
   type PriceBook,
   type Receipt,
   type VerifyOutput,
@@ -17,6 +18,8 @@ export interface VerifyRequest {
   expectedSubmitter: string;
   /** Published unit prices for the capability. Without it the meter check cannot run. */
   priceBook?: PriceBook;
+  /** Needed to check the meter when the receipt settled in an HTS token. */
+  asset?: AssetSpec;
 }
 
 export interface FullVerifyOutput extends VerifyOutput {
@@ -74,6 +77,7 @@ export async function verifyFromMirror(
     message,
     expectedSubmitter: request.expectedSubmitter,
     priceBook: request.priceBook,
+    asset: request.asset,
     transaction,
   });
 

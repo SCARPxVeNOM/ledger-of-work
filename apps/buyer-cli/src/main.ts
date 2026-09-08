@@ -25,6 +25,7 @@ function required(name: string): string {
 }
 
 const capability = arg("capability", "quotes.search_and_extract") as string;
+const asset = arg("asset");
 const out = arg("out", "./result.json") as string;
 
 // Anything after --param key=value pairs becomes the job parameters.
@@ -49,13 +50,13 @@ console.log(`params      ${JSON.stringify(params)}\n`);
 const quoteRes = await fetch(`${SELLER}/jobs`, {
   method: "POST",
   headers: { "content-type": "application/json" },
-  body: JSON.stringify({ capability, params }),
+  body: JSON.stringify({ capability, params, ...(asset ? { asset } : {}) }),
 });
 const quote = (await quoteRes.json()) as {
   jobId: string;
   run: string;
   plan?: { steps: number; pages: number; outline: string[] };
-  price?: { amount: string };
+  price?: { amount: string; asset?: string; assetSymbol?: string; assetAmount?: string };
   error?: string;
   message?: string;
 };
@@ -65,7 +66,12 @@ if (!quoteRes.ok) {
   process.exit(1);
 }
 
-console.log(`quote       ${quote.price?.amount} tinybar for ${quote.plan?.steps} steps / ${quote.plan?.pages} pages`);
+const inToken = quote.price?.asset && quote.price.asset !== "0.0.0";
+console.log(
+  `quote       ${quote.price?.amount} tinybar for ${quote.plan?.steps} steps / ${quote.plan?.pages} pages` +
+    (inToken ? `
+              = ${quote.price?.assetAmount} units of ${quote.price?.assetSymbol} (${quote.price?.asset})` : ""),
+);
 for (const line of quote.plan?.outline ?? []) console.log(`              - ${line}`);
 
 // --- 2. trigger the 402 --------------------------------------------------------
@@ -76,7 +82,9 @@ if (challenge.status !== 402) {
 }
 const { accepts } = (await challenge.json()) as { accepts: PaymentRequirements[] };
 const requirements = accepts[0] as PaymentRequirements;
-console.log(`\n402         pay ${requirements.amount} tinybar to ${requirements.payTo}`);
+const unit =
+  requirements.asset === "0.0.0" ? "tinybar" : `units of ${quote.price?.assetSymbol ?? "token"}`;
+console.log(`\n402         pay ${requirements.amount} ${unit} to ${requirements.payTo}`);
 console.log(`              fee payer ${requirements.extra.feePayer}, asset ${requirements.asset}`);
 
 // --- 3. pay and retry ----------------------------------------------------------
@@ -92,7 +100,7 @@ const paid = await fetch(quote.run, { method: "POST", headers: { "payment-signat
 const body = (await paid.json()) as {
   result?: unknown;
   receipt?: { topicId: string; sequenceNumber: number; explorer: string };
-  price?: { quoted: string; charged: string };
+  price?: { quoted: string; charged: string; unit?: string };
   plan?: { steps: number; pages: number };
   work?: { steps: number; pages: number; sessionMs: number };
   payment?: { txId?: string; payer?: string };
@@ -115,8 +123,8 @@ console.log(`\ndone in ${Date.now() - t0}ms`);
 console.log(`  items     ${items.length}`);
 console.log(`  planned   ${body.plan?.steps} steps, ${body.plan?.pages} pages`);
 console.log(`  actual    ${body.work?.steps} steps, ${body.work?.pages} pages, ${body.work?.sessionMs}ms`);
-console.log(`  quoted    ${body.price?.quoted} tinybar`);
-console.log(`  charged   ${body.price?.charged} tinybar`);
+console.log(`  quoted    ${body.price?.quoted} ${body.price?.unit ?? unit}`);
+console.log(`  charged   ${body.price?.charged} ${body.price?.unit ?? unit}`);
 console.log(`  payer     ${body.payment?.payer}`);
 console.log(`  tx        ${body.payment?.txId}`);
 console.log(`\n  result -> ${out}`);

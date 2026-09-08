@@ -4,6 +4,7 @@ import {
   Hbar,
   HbarUnit,
   PrivateKey,
+  TokenId,
   TransactionId,
   TransferTransaction,
 } from "@hiero-ledger/sdk";
@@ -39,23 +40,30 @@ export async function buildPayment(
   requirements: PaymentRequirements,
   credentials: BuyerCredentials,
 ): Promise<string> {
-  if (requirements.asset !== "0.0.0") {
-    throw new Error(
-      `this client only pays in HBAR; the seller asked for asset ${requirements.asset}`,
-    );
-  }
-
   const buyerId = AccountId.fromString(credentials.accountId);
   const buyerKey = PrivateKey.fromStringECDSA(credentials.privateKey.replace(/^0x/i, ""));
   const client = Client.forName(credentials.network ?? "testnet").setOperator(buyerId, buyerKey);
 
   try {
-    const amount = Hbar.from(requirements.amount, HbarUnit.Tinybar);
-    const tx = new TransferTransaction()
-      .setTransactionId(TransactionId.generate(AccountId.fromString(requirements.extra.feePayer)))
-      .addHbarTransfer(buyerId, amount.negated())
-      .addHbarTransfer(AccountId.fromString(requirements.payTo), amount)
-      .freezeWith(client);
+    const payTo = AccountId.fromString(requirements.payTo);
+    const tx = new TransferTransaction().setTransactionId(
+      TransactionId.generate(AccountId.fromString(requirements.extra.feePayer)),
+    );
+
+    if (requirements.asset === "0.0.0") {
+      const amount = Hbar.from(requirements.amount, HbarUnit.Tinybar);
+      tx.addHbarTransfer(buyerId, amount.negated()).addHbarTransfer(payTo, amount);
+    } else {
+      // HTS amounts are already in the token's smallest units, so no conversion here —
+      // the seller advertised the amount in those units. The recipient must have
+      // associated the token or settlement fails with TOKEN_NOT_ASSOCIATED_TO_ACCOUNT;
+      // that is a setup concern, not something to paper over at signing time.
+      const token = TokenId.fromString(requirements.asset);
+      const units = BigInt(requirements.amount);
+      tx.addTokenTransfer(token, buyerId, -units).addTokenTransfer(token, payTo, units);
+    }
+
+    tx.freezeWith(client);
 
     const signed = await tx.sign(buyerKey);
 

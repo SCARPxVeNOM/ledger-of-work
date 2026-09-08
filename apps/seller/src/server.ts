@@ -1,5 +1,5 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { priceTinybars } from "@low/protocol";
+import { HBAR, priceTinybars, tinybarToAssetUnits, type AssetSpec } from "@low/protocol";
 import { CATALOGUE, BadParamsError, getCapability } from "@low/worker";
 import { ReceiptPublisher } from "@low/receipts";
 import { chromium, type Browser } from "playwright";
@@ -16,6 +16,8 @@ export interface SellerConfig {
   sellerPrivateKey: string;
   topicId: string;
   publicUrl?: string;
+  /** Optional HTS asset a buyer may pay in instead of HBAR. */
+  paymentToken?: AssetSpec | undefined;
 }
 
 export async function startSeller(config: SellerConfig) {
@@ -50,6 +52,9 @@ export async function startSeller(config: SellerConfig) {
    * where receipts are published. It can compute a price itself before asking, and pay
    * with no prior relationship and no API key.
    */
+  const assets: AssetSpec[] = config.paymentToken ? [HBAR, config.paymentToken] : [HBAR];
+  const assetById = new Map(assets.map((a) => [a.id, a]));
+
   const manifest = () => ({
     name: "Ledger of Work",
     description:
@@ -58,11 +63,21 @@ export async function startSeller(config: SellerConfig) {
     payment: {
       network: config.network,
       scheme: "exact",
-      asset: "0.0.0",
       payTo: config.sellerAccountId,
       facilitator: config.facilitatorUrl,
       feePayer,
-      unit: "tinybar",
+      /** Prices are published in tinybars; each asset declares its own conversion. */
+      priceUnit: "tinybar",
+      assets: assets.map((a) => ({
+        asset: a.id,
+        symbol: a.symbol,
+        decimals: a.decimals,
+        unitsPerTinybar: a.unitsPerTinybar,
+        note:
+          a.id === HBAR.id
+            ? "native HBAR, no association needed"
+            : "HTS token — payTo must have associated it",
+      })),
     },
     receipts: {
       topicId: config.topicId,
@@ -114,6 +129,11 @@ export async function startSeller(config: SellerConfig) {
     if (path === "/jobs" && req.method === "POST") {
       const body = await readJson(req);
       const capability = (body as { capability?: string }).capability ?? "";
+      const assetId = (body as { asset?: string }).asset ?? HBAR.id;
+      const asset = assetById.get(assetId);
+      if (!asset) {
+        return send(res, 400, { error: "unsupported_asset", supported: [...assetById.keys()] });
+      }
       const adapter = getCapability(capability);
       if (!adapter) {
         return send(res, 404, {
@@ -137,12 +157,17 @@ export async function startSeller(config: SellerConfig) {
         { steps: plan.steps, pages: plan.pages, sessionMs: plan.estimatedMs },
         adapter.spec.priceBook,
       );
+      // Prices are metered in tinybars; a non-HBAR asset converts at its published rate
+      // so a buyer can reproduce the number from the manifest alone.
+      const assetAmount = tinybarToAssetUnits(amount, asset);
       const quote = quotes.create(
         capability,
         params,
         { steps: plan.steps, pages: plan.pages, estimatedMs: plan.estimatedMs, outline: plan.outline },
         amount,
         adapter.spec.priceBook,
+        asset,
+        assetAmount,
       );
 
       return send(res, 200, {
@@ -150,7 +175,14 @@ export async function startSeller(config: SellerConfig) {
         capability,
         params,
         plan: { steps: plan.steps, pages: plan.pages, outline: plan.outline },
-        price: { unit: "tinybar", amount, priceBook: adapter.spec.priceBook },
+        price: {
+          unit: "tinybar",
+          amount,
+          asset: asset.id,
+          assetSymbol: asset.symbol,
+          assetAmount,
+          priceBook: adapter.spec.priceBook,
+        },
         expiresAt: quote.expiresAt,
         run: `${base}/jobs/${quote.jobId}/run`,
         events: `${base}/jobs/${quote.jobId}/events`,
@@ -183,7 +215,11 @@ export async function startSeller(config: SellerConfig) {
       const adapter = getCapability(quote.capability);
       if (!adapter) return send(res, 500, { error: "capability_disappeared" });
 
-      const requirements = facilitator.requirements(quote.amount, config.sellerAccountId);
+      const requirements = facilitator.requirements(
+        quote.assetAmount,
+        config.sellerAccountId,
+        quote.asset.id,
+      );
       const header = req.headers["payment-signature"] ?? req.headers["x-payment"];
 
       // No payment yet: issue the 402 challenge with everything needed to pay.

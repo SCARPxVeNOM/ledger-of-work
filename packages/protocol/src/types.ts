@@ -86,7 +86,13 @@ export interface Receipt {
   /** What the worker actually did. Compare against `plan` to see the variance absorbed. */
   work: Omit<StepLog, "sources">;
   price: {
-    unit: "tinybar";
+    /**
+     * The denomination `quoted` and `charged` are expressed in: "tinybar" for HBAR, or
+     * the token's symbol when settling in an HTS asset. The metered price is always
+     * computed in tinybars; this records what the buyer actually signed for, which is
+     * what lands on chain and what the payment check compares against.
+     */
+    unit: string;
     quoted: string;
     charged: string;
   };

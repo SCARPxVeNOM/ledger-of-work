@@ -1,3 +1,4 @@
+import { isHbar, tinybarToAssetUnits, type AssetSpec } from "./assets.js";
 import { canonical, hashCanonical } from "./canonical.js";
 import { consensusTimestampToMillis } from "./hedera.js";
 import { price } from "./price.js";
@@ -39,6 +40,12 @@ export interface VerifyInput {
   expectedSubmitter: string;
   /** The published price book for the capability named in the receipt. */
   priceBook?: PriceBook | undefined;
+  /**
+   * The asset the receipt was settled in. Required to check the meter when payment was
+   * not in HBAR, because the price book is published in tinybars and the receipt records
+   * the converted amount.
+   */
+  asset?: AssetSpec | undefined;
   /** The settlement transaction, if the caller resolved it. Enables the payment checks. */
   transaction?: MirrorTransaction | undefined;
   /** How far after `finishedAt` a consensus timestamp may fall before it looks wrong. */
@@ -137,7 +144,17 @@ export function verifyReceipt(input: VerifyInput): VerifyOutput {
   // 6. The payment claim.
   if (input.transaction) {
     const tx = input.transaction;
-    const paidToSeller = tx.transfers
+    const payingInHbar = isHbar(receipt.payment.asset);
+
+    // An HTS payment moves no HBAR to the seller, so reading `transfers` would see zero
+    // and fail every token settlement. The transfers to inspect depend on the asset.
+    const credits = payingInHbar
+      ? tx.transfers.map((t) => ({ account: t.account, amount: t.amount }))
+      : (tx.token_transfers ?? [])
+          .filter((t) => t.token_id === receipt.payment.asset)
+          .map((t) => ({ account: t.account, amount: t.amount }));
+
+    const paidToSeller = credits
       .filter((t) => t.account === receipt.payment.payTo && t.amount > 0)
       .reduce((sum, t) => sum + BigInt(t.amount), 0n);
     const charged = BigInt(receipt.price.charged);
@@ -146,15 +163,13 @@ export function verifyReceipt(input: VerifyInput): VerifyOutput {
       "payment",
       "Settlement succeeded for exactly the charged amount",
       tx.result === "SUCCESS" && paidToSeller === charged,
-      `result=${tx.result}, ${paidToSeller} tinybar to ${receipt.payment.payTo}, receipt claims ${charged}`,
+      `result=${tx.result}, ${paidToSeller} ${receipt.price.unit} to ${receipt.payment.payTo}, receipt claims ${charged}`,
     );
 
     // The named buyer must actually appear as a net sender. This is what ties the
     // identity in the receipt to the on-chain event, and it is the reason the buyer is
     // captured from /verify rather than read back out of the transaction id.
-    const payerSent = tx.transfers.some(
-      (t) => t.account === receipt.payment.payer && t.amount < 0,
-    );
+    const payerSent = credits.some((t) => t.account === receipt.payment.payer && t.amount < 0);
     add(
       "payer",
       "Named paying agent is a net sender in the transaction",
@@ -179,38 +194,46 @@ export function verifyReceipt(input: VerifyInput): VerifyOutput {
       { steps: receipt.plan.steps, pages: receipt.plan.pages, sessionMs: receipt.plan.estimatedMs },
       input.priceBook,
     );
-    const quoteHonest = quotedFromPlan.total.toString() === receipt.price.quoted;
+    // The price book is published in tinybars. When the buyer paid in a token, the
+    // receipt records the converted amount, so the comparison has to convert too.
+    const expectedQuote = input.asset
+      ? tinybarToAssetUnits(quotedFromPlan.total, input.asset)
+      : quotedFromPlan.total.toString();
+    const quoteHonest = expectedQuote === receipt.price.quoted;
     const chargedAsQuoted = receipt.price.charged === receipt.price.quoted;
 
     add(
       "meter",
       "Quote follows the published price book",
       quoteHonest,
-      `plan ${JSON.stringify(receipt.plan)} prices at ${quotedFromPlan.total}, receipt quoted ${receipt.price.quoted}`,
+      `plan ${JSON.stringify(receipt.plan)} prices at ${expectedQuote} ${receipt.price.unit}, receipt quoted ${receipt.price.quoted}`,
     );
     add(
       "charge",
       "Charged exactly what was quoted",
       chargedAsQuoted,
       chargedAsQuoted
-        ? `${receipt.price.charged} tinybar`
+        ? `${receipt.price.charged} ${receipt.price.unit}`
         : `quoted ${receipt.price.quoted}, charged ${receipt.price.charged}`,
     );
 
     // Informational, not a pass/fail: it shows who absorbed the difference between the
     // estimate and reality. A meter that never diverges is a flat fee in disguise.
-    const actual = price(receipt.work, input.priceBook);
-    const variance = actual.total - BigInt(receipt.price.charged);
+    const actualRaw = price(receipt.work, input.priceBook);
+    const actual = input.asset
+      ? BigInt(tinybarToAssetUnits(actualRaw.total, input.asset))
+      : actualRaw.total;
+    const variance = actual - BigInt(receipt.price.charged);
     add(
       "variance",
       "Work performed, priced for comparison",
       true,
-      `actual work prices at ${actual.total}; ${
+      `actual work prices at ${actual} ${receipt.price.unit}; ${
         variance === 0n
           ? "matches the charge exactly"
           : variance > 0n
-            ? `${variance} tinybar more than charged, absorbed by the seller`
-            : `${-variance} tinybar less than charged, the plan overestimated`
+            ? `${variance} ${receipt.price.unit} more than charged, absorbed by the seller`
+            : `${-variance} ${receipt.price.unit} less than charged, the plan overestimated`
       }`,
     );
   } else {

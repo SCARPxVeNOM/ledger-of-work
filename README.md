@@ -57,8 +57,8 @@ independently verified.
 | `apps/buyer-cli` — buying agent | done |
 | `apps/verifier` — independent verification CLI | done |
 | `apps/mcp` — MCP server for buying agents | done |
-| `apps/web` — demo UI | planned |
-| HTS token as payment asset | planned |
+| `apps/web` — demo UI | done |
+| HTS token as payment asset | done |
 
 107 tests, none of which touch the network.
 
@@ -75,6 +75,11 @@ Two jobs against the same capability, differing only in size:
 
 A 5x price difference for 4x the work, settled exactly, on chain. That spread is the
 whole argument for pay-per-job over pay-per-call.
+
+The same job also settles in an HTS token ([`0.0.10416991`](https://hashscan.io/testnet/token/0.0.10416991),
+"WORK", 2 decimals) at a published rate of 0.001 units per tinybar — so the 312,000-tinybar
+quote becomes 3.12 WORK. An agent holding a stablecoin should not have to hold the
+network's native asset to buy anything.
 
 Verifying the first one, from public data only:
 
@@ -159,6 +164,14 @@ followed the published price book — not that the charge equals the price of th
 performed. Checking the latter would fail every honest job where the estimate was
 imperfect, which is most of them. The variance is reported so the absorption is visible
 rather than something the seller can quietly pocket.
+
+**Prices are metered in tinybars and converted at a published rate.** The price book is
+denominated in tinybars whatever the buyer pays in; a non-HBAR asset declares its own
+`unitsPerTinybar` in the manifest, so a buyer can reproduce the number without asking.
+Conversion is integer-only and rounds **up** — the exact scheme rejects a payment that
+credits less than `amount`, so rounding down would under-bill and then fail settlement.
+The rate is fixed and declared rather than oracle-derived, because a rate that moves
+makes yesterday's receipt unverifiable today.
 
 **Receipts fit in one HCS chunk.** Messages over 1024 bytes are split across
 transactions, and the mirror node REST API does not reassemble them. A size assertion

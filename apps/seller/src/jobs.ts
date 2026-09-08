@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { hashCanonical, type PriceBook, type Receipt } from "@low/protocol";
+import { hashCanonical, type AssetSpec, type PriceBook, type Receipt } from "@low/protocol";
 import { JobAbortedError, runJob, type SiteAdapter, type StepEvent } from "@low/worker";
 import type { Browser } from "playwright";
 import type { ReceiptPublisher, ReceiptLocator } from "@low/receipts";
@@ -20,8 +20,12 @@ export interface Quote {
    * into the receipt so a verifier can confirm the quote followed the price book.
    */
   plan: { steps: number; pages: number; estimatedMs: number; outline: string[] };
-  /** Integer tinybars. */
+  /** Integer tinybars — the metered price, independent of how it is paid. */
   amount: string;
+  /** The asset the buyer will actually pay in. */
+  asset: AssetSpec;
+  /** `amount` converted into that asset's smallest units. This is what gets signed. */
+  assetAmount: string;
   priceBook: PriceBook;
   expiresAt: string;
   createdAt: number;
@@ -33,13 +37,23 @@ export const QUOTE_TTL_MS = 5 * 60_000;
 export class QuoteStore {
   readonly #quotes = new Map<string, Quote>();
 
-  create(capability: string, params: unknown, plan: Quote["plan"], amount: string, priceBook: PriceBook): Quote {
+  create(
+    capability: string,
+    params: unknown,
+    plan: Quote["plan"],
+    amount: string,
+    priceBook: PriceBook,
+    asset: AssetSpec,
+    assetAmount: string,
+  ): Quote {
     const quote: Quote = {
       jobId: randomUUID(),
       capability,
       params,
       plan,
       amount,
+      asset,
+      assetAmount,
       priceBook,
       createdAt: Date.now(),
       expiresAt: new Date(Date.now() + QUOTE_TTL_MS).toISOString(),
@@ -152,7 +166,7 @@ export async function executeJob(
   // number, so an overrun is the seller's cost. The receipt records the plan and the
   // actual work side by side, which is what makes the absorption visible rather than
   // something the seller can quietly pocket.
-  const charged = failure ? "0" : quote.amount;
+  const charged = failure ? "0" : quote.assetAmount;
 
   const result = failure ? undefined : { capability: quote.capability, params: quote.params, items };
   const resultHash = failure ? "sha256:" + "0".repeat(64) : hashCanonical(result);
@@ -172,7 +186,7 @@ export async function executeJob(
       estimatedMs: quote.plan.estimatedMs,
     },
     work,
-    price: { unit: "tinybar", quoted: quote.amount, charged },
+    price: { unit: quote.asset.id === "0.0.0" ? "tinybar" : quote.asset.symbol, quoted: quote.assetAmount, charged },
     payment: {
       network: deps.network,
       scheme: "exact",
@@ -212,7 +226,7 @@ export async function executeJob(
   if (payer) receipt.payment.payer = payer;
 
   const locator = await deps.publisher.publish(receipt);
-  return { ok: true, result, receipt, locator, charged: quote.amount };
+  return { ok: true, result, receipt, locator, charged: quote.assetAmount };
 }
 
 export class PaymentRejectedError extends Error {

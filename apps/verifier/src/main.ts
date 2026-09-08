@@ -26,9 +26,27 @@ const capability = arg("capability");
 const submitter = arg("submitter") ?? process.env.SELLER_ACCOUNT_ID;
 const mirrorUrl = arg("mirror") ?? process.env.MIRROR_NODE_URL;
 
+/**
+ * Settling in an HTS token means the receipt records the converted amount, so the meter
+ * check needs the published rate to compare against. Taken from flags or the environment
+ * — in a real deployment a verifier would read it from the seller's manifest and could
+ * check that the manifest itself has not changed.
+ */
+const assetId = arg("asset") ?? process.env.PAYMENT_TOKEN_ID;
+const asset =
+  assetId && assetId !== "0.0.0"
+    ? {
+        id: assetId,
+        symbol: arg("assetSymbol") ?? process.env.PAYMENT_TOKEN_SYMBOL ?? "TOKEN",
+        decimals: Number(arg("assetDecimals") ?? process.env.PAYMENT_TOKEN_DECIMALS ?? 2),
+        unitsPerTinybar: arg("assetRate") ?? process.env.PAYMENT_TOKEN_RATE ?? "0.001",
+      }
+    : undefined;
+
 if (!topicId || !seq || !resultPath) {
   console.error(`usage: verify --topic <0.0.x> --seq <n> --result <file.json>
                    [--capability <name>] [--submitter <0.0.x>] [--mirror <url>]
+                   [--asset <0.0.x>] [--assetRate <units-per-tinybar>]
 
 Verifies that a result matches its on-chain receipt, that the retrieval happened when
 claimed, that the payment settled for the amount recorded, and that the price follows
@@ -66,6 +84,7 @@ const out = await verifyFromMirror(
     result,
     expectedSubmitter: submitter,
     ...(priceBook ? { priceBook } : {}),
+    ...(asset ? { asset } : {}),
   },
   mirrorUrl ? { baseUrl: mirrorUrl } : {},
 );

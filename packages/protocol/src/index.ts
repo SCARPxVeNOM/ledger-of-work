@@ -1,3 +1,11 @@
+export {
+  HBAR,
+  HBAR_ASSET,
+  formatAssetAmount,
+  isHbar,
+  tinybarToAssetUnits,
+  type AssetSpec,
+} from "./assets.js";
 export { canonical, canonicalByteLength, hashCanonical, sha256 } from "./canonical.js";
 export {
   TINYBAR_PER_HBAR,
