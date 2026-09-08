@@ -31,6 +31,7 @@ const seller = await startSeller({
   topicId: required("SELLER_TOPIC_ID"),
   paymentToken,
   agentCardFileId: process.env.AGENT_CARD_FILE_ID,
+  quoteStorePath: process.env.QUOTE_STORE_PATH ?? ".data/quotes.json",
 });
 
 console.log(`seller listening on http://localhost:${seller.port}`);

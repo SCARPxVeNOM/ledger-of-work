@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { HBAR, type PriceBook, type Receipt } from "@low/protocol";
-import { QuoteStore, executeJob, type Quote } from "../src/jobs.js";
+import { executeJob } from "../src/jobs.js";
+import { QuoteStore, type Quote } from "../src/quote-store.js";
 
 /**
  * These exercise the lifecycle's failure paths without a browser or a network.
@@ -212,23 +213,5 @@ describe("publishing a receipt", () => {
         adapter: okAdapter,
       }),
     ).rejects.toThrow(/could not be published/);
-  });
-});
-
-describe("QuoteStore", () => {
-  it("consumes a quote so one payment cannot buy two jobs", () => {
-    const store = new QuoteStore();
-    const q = store.create("c", {}, { steps: 1, pages: 1, estimatedMs: 1, outline: [] }, "1", PRICE_BOOK, HBAR, "1");
-    expect(store.consume(q.jobId)).toBeDefined();
-    expect(store.consume(q.jobId)).toBeUndefined();
-  });
-
-  it("expires a stale quote so a cheap one cannot be banked", () => {
-    const store = new QuoteStore();
-    const q = store.create("c", {}, { steps: 1, pages: 1, estimatedMs: 1, outline: [] }, "1", PRICE_BOOK, HBAR, "1");
-    // Age the quote rather than waiting five real minutes.
-    const stored = store.get(q.jobId) as Quote;
-    stored.createdAt = Date.now() - 10 * 60_000;
-    expect(store.get(q.jobId)).toBeUndefined();
   });
 });

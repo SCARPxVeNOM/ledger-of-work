@@ -1,8 +1,8 @@
-import { randomUUID } from "node:crypto";
-import { hashCanonical, type AssetSpec, type PriceBook, type Receipt } from "@low/protocol";
+import { hashCanonical, type Receipt } from "@low/protocol";
 import { JobAbortedError, runJob, type SiteAdapter, type StepEvent } from "@low/worker";
 import type { Browser } from "playwright";
 import type { ReceiptLocator, ReceiptPublisher } from "@low/receipts";
+import type { Quote } from "./quote-store.js";
 import {
   resolvePayer,
   settlementTxId,
@@ -10,84 +10,6 @@ import {
   type PaymentPayload,
   type PaymentRequirements,
 } from "./facilitator.js";
-
-export interface Quote {
-  jobId: string;
-  capability: string;
-  params: unknown;
-  /**
-   * What the plan expects to do, shown to the buyer so the price is legible and written
-   * into the receipt so a verifier can confirm the quote followed the price book.
-   */
-  plan: { steps: number; pages: number; estimatedMs: number; outline: string[] };
-  /** Integer tinybars — the metered price, independent of how it is paid. */
-  amount: string;
-  /** The asset the buyer will actually pay in. */
-  asset: AssetSpec;
-  /** `amount` converted into that asset's smallest units. This is what gets signed. */
-  assetAmount: string;
-  priceBook: PriceBook;
-  expiresAt: string;
-  createdAt: number;
-}
-
-/** Quotes are short-lived so a buyer cannot bank a cheap one and redeem it much later. */
-export const QUOTE_TTL_MS = 5 * 60_000;
-
-export class QuoteStore {
-  readonly #quotes = new Map<string, Quote>();
-
-  create(
-    capability: string,
-    params: unknown,
-    plan: Quote["plan"],
-    amount: string,
-    priceBook: PriceBook,
-    asset: AssetSpec,
-    assetAmount: string,
-  ): Quote {
-    const quote: Quote = {
-      jobId: randomUUID(),
-      capability,
-      params,
-      plan,
-      amount,
-      asset,
-      assetAmount,
-      priceBook,
-      createdAt: Date.now(),
-      expiresAt: new Date(Date.now() + QUOTE_TTL_MS).toISOString(),
-    };
-    this.#quotes.set(quote.jobId, quote);
-    return quote;
-  }
-
-  get(jobId: string): Quote | undefined {
-    const quote = this.#quotes.get(jobId);
-    if (!quote) return undefined;
-    if (Date.now() - quote.createdAt > QUOTE_TTL_MS) {
-      this.#quotes.delete(jobId);
-      return undefined;
-    }
-    return quote;
-  }
-
-  /** A quote is consumed on use, so one payment cannot buy two jobs. */
-  consume(jobId: string): Quote | undefined {
-    const quote = this.get(jobId);
-    if (quote) this.#quotes.delete(jobId);
-    return quote;
-  }
-
-  sweep(): void {
-    const cutoff = Date.now() - QUOTE_TTL_MS;
-    for (const [id, q] of this.#quotes) if (q.createdAt < cutoff) this.#quotes.delete(id);
-  }
-
-  get size(): number {
-    return this.#quotes.size;
-  }
-}
 
 export interface ExecuteDeps {
   // biome-ignore lint/suspicious/noExplicitAny: the catalogue is heterogeneous by design

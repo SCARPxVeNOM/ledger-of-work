@@ -8,12 +8,11 @@ export {
   type SettleResponse,
   type VerifyResponse,
 } from "./facilitator.js";
+export { PaymentRejectedError, executeJob, type ExecuteOutcome } from "./jobs.js";
 export {
-  PaymentRejectedError,
   QUOTE_TTL_MS,
   QuoteStore,
-  executeJob,
-  type ExecuteOutcome,
   type Quote,
-} from "./jobs.js";
+  type QuoteStoreOptions,
+} from "./quote-store.js";
 export { startSeller, type SellerConfig } from "./server.js";

@@ -5,7 +5,8 @@ import { ReceiptPublisher } from "@low/receipts";
 import { chromium, type Browser } from "playwright";
 import { FacilitatorClient, type PaymentPayload } from "./facilitator.js";
 import { JobEventRegistry } from "./events.js";
-import { PaymentRejectedError, QuoteStore, executeJob } from "./jobs.js";
+import { PaymentRejectedError, executeJob } from "./jobs.js";
+import { QuoteStore } from "./quote-store.js";
 
 export interface SellerConfig {
   port: number;
@@ -16,6 +17,8 @@ export interface SellerConfig {
   sellerPrivateKey: string;
   topicId: string;
   publicUrl?: string;
+  /** Where to persist outstanding quotes so a restart does not drop price commitments. */
+  quoteStorePath?: string | undefined;
   /** HFS file holding this manifest, so a buyer can check it without trusting us. */
   agentCardFileId?: string | undefined;
   /** Optional HTS asset a buyer may pay in instead of HBAR. */
@@ -40,7 +43,7 @@ export async function startSeller(config: SellerConfig) {
   // One browser for the process. Launching Chromium costs ~300ms that no buyer should
   // be billed for; each job still gets its own isolated context.
   const browser: Browser = await chromium.launch({ headless: true });
-  const quotes = new QuoteStore();
+  const quotes = new QuoteStore({ path: config.quoteStorePath });
   const events = new JobEventRegistry();
   const sweeper = setInterval(() => quotes.sweep(), 60_000);
   sweeper.unref();
