@@ -52,6 +52,7 @@ independently verified.
 | --- | --- |
 | `packages/protocol` — receipt schema, canonical hashing, meter, verifier checks | done |
 | `packages/worker` — site adapters, Playwright runtime, work meter | done |
+| Real-site adapter (govinfo.gov Federal Register) | done |
 | `packages/receipts` — HCS publisher + mirror-node reader | done |
 | `apps/seller` — x402 resource server | done |
 | `apps/buyer-cli` — buying agent | done |
@@ -81,6 +82,41 @@ The same job also settles in an HTS token ([`0.0.10416991`](https://hashscan.io/
 "WORK", 2 decimals) at a published rate of 0.001 units per tinybar — so the 312,000-tinybar
 quote becomes 3.12 WORK. An agent holding a stablecoin should not have to hold the
 network's native asset to buy anything.
+
+### A real site, not just a sandbox
+
+`govinfo.federal_register_issues` clicks through the Federal Register browse tree on
+**govinfo.gov** — a real US Government Publishing Office service. It is the sharpest
+demonstration of the whole premise:
+
+```
+plain GET of the same URL      1,762 bytes
+  mentions "Federal Register"  false
+  accordion markup             false
+  any issue dates              false
+
+the job                        8 issues with dates and printed page ranges
+  step 1  open the Federal Register browse tree
+  step 2  expand 2025
+  step 3  expand January
+```
+
+govinfo is an Angular application. The browse tree is nested collapsed accordions —
+year, then month, then day — each loading its children only when clicked, and there is
+no URL that jumps to a month's issue list. A single request cannot produce this result
+no matter how it is constructed.
+
+**robots.txt:** govinfo disallows `/search/`. This adapter never touches it — it uses
+only `/app/collection/...`, which is not disallowed, identifies itself in the user
+agent, and paces its clicks.
+
+**The honest caveat:** govinfo also publishes an official API at `api.govinfo.gov`. So
+this site is a strong example of *"not a fetch"* and a weak example of *"no API"*. It is
+here to prove the adapter interface generalises to a real, JS-rendered government site —
+not to claim the data is otherwise unobtainable. Every genuinely API-less alternative
+examined either disallowed crawling outright (`leginfo.legislature.ca.gov` disallows
+everything; `congress.gov` disallows search and 403s plain clients) or blocked
+unauthenticated readers, which is itself a finding about this market.
 
 Verifying the first one, from public data only:
 

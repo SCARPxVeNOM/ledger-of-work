@@ -84,6 +84,32 @@ Open the HashScan link on the receipt to show the message is really there.
 
 ---
 
+## The real-site leg (60s, optional but strong)
+
+Switch the capability to `govinfo.federal_register_issues`, year 2025, month 1.
+
+> This is govinfo.gov — the Government Publishing Office. Before running it, look at what
+> a plain GET of the same URL returns.
+
+```bash
+curl -s "https://www.govinfo.gov/app/collection/FR" | wc -c     # ~1762
+curl -s "https://www.govinfo.gov/app/collection/FR" | grep -c "Federal Register"   # 0
+```
+
+> Seventeen hundred bytes and not one mention of the Federal Register. It is an Angular
+> app: the browse tree is collapsed accordions — year, month, day — that load only when
+> clicked, and no URL jumps to a month's issue list. Now watch the job.
+
+Run it. Three steps, and it returns real issues with their printed page ranges.
+
+> That is the whole argument in one screen. Not a fetch.
+
+Be ready for the follow-up: **govinfo does have an API** at api.govinfo.gov. Say so
+before someone else does — this adapter proves the interface generalises to a real
+JS-rendered government site, it does not claim the data is otherwise unobtainable. Every
+genuinely API-less alternative we checked either disallows crawling outright or blocks
+unauthenticated readers, which is itself worth saying out loud.
+
 ## If you have another minute
 
 **Any agent can buy this.** `pnpm mcp` speaks MCP over stdio: `list_capabilities` reads
@@ -147,7 +173,10 @@ successes proves nothing.
 - Quotes are held in memory, so a seller restart drops open ones.
 - The demo server holds the buyer's key. A real buyer would sign in their own wallet;
   putting a private key in browser JavaScript would have been the wrong lesson.
-- One capability runs against sandboxes built for scraping. The adapter interface is the
-  deliverable; a real site is a week-one decision that has not been made yet.
+- Two capabilities run against sandboxes built for scraping; the third runs against a
+  real .gov site. govinfo has its own API, so it proves "not a fetch" rather than "no
+  API" — see the note above.
+- The govinfo adapter reads the browse tree only. It respects `Disallow: /search/`,
+  identifies itself in the user agent, and paces its clicks.
 - HFS file *contents* are not exposed over the mirror REST API, so reading the agent card
   needs an account. The receipt path has no such limitation.

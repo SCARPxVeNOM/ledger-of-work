@@ -1,4 +1,5 @@
 import { booksAdapter } from "./adapters/books.js";
+import { govinfoAdapter } from "./adapters/govinfo.js";
 import { quotesAdapter } from "./adapters/quotes.js";
 import type { SiteAdapter } from "./types.js";
 
@@ -26,6 +27,12 @@ export {
   type BooksParams,
 } from "./adapters/books.js";
 export {
+  govinfoAdapter,
+  parseDayLabel,
+  type FederalRegisterIssue,
+  type GovinfoParams,
+} from "./adapters/govinfo.js";
+export {
   parseQuotes,
   quotesAdapter,
   type Quote,
@@ -43,6 +50,7 @@ export {
 export const CATALOGUE: Record<string, SiteAdapter<any, any>> = {
   [quotesAdapter.spec.name]: quotesAdapter,
   [booksAdapter.spec.name]: booksAdapter,
+  [govinfoAdapter.spec.name]: govinfoAdapter,
 };
 
 export function getCapability(name: string) {
