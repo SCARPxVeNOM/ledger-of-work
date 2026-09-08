@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { hashCanonical, type AssetSpec, type PriceBook, type Receipt } from "@low/protocol";
 import { JobAbortedError, runJob, type SiteAdapter, type StepEvent } from "@low/worker";
 import type { Browser } from "playwright";
-import type { ReceiptPublisher, ReceiptLocator } from "@low/receipts";
+import type { ReceiptLocator, ReceiptPublisher } from "@low/receipts";
 import {
   resolvePayer,
   settlementTxId,
@@ -115,13 +115,19 @@ export interface ExecuteOutcome {
  *
  * Ordering is deliberate and load-bearing:
  *
- *   verify -> execute -> hash -> publish receipt -> settle -> respond
+ *   verify -> execute -> hash -> settle -> publish receipt -> respond
  *
  * `verify` first because it is free and rejects a bad payment before we spend real work.
- * `settle` last because settling first would charge for a job that then failed. The
- * receipt is published *before* settlement so a record exists even if settlement fails —
- * a second `settlement` message records the outcome. Publishing after settling would
- * risk charging with no record, which is the worse of the two failures.
+ * `settle` before publishing because the receipt's whole value is binding the delivered
+ * result to the payment that bought it, and a receipt written before settlement cannot
+ * carry a transaction id. That ordering leaves a short window — roughly the two seconds
+ * between settlement and consensus — in which a crash would mean a charge with no
+ * record; `publishWithRetry` below narrows it, and the risk is stated in the README
+ * rather than hidden.
+ *
+ * Both failure paths still publish. A job that fails settles nothing and charges zero,
+ * and a settlement that fails is recorded as such. A log that only records successes
+ * proves nothing.
  */
 export async function executeJob(
   quote: Quote,
@@ -201,7 +207,7 @@ export async function executeJob(
   // back on, so the only honest option is not to charge. The receipt is still published:
   // a log that records only successes proves nothing.
   if (failure) {
-    const locator = await deps.publisher.publish(receipt);
+    const locator = await publishWithRetry(deps.publisher, receipt);
     return { ok: false, receipt, locator, charged: "0", error: failure };
   }
 
@@ -209,7 +215,7 @@ export async function executeJob(
   if (!settle.success) {
     receipt.status = "failed";
     receipt.price.charged = "0";
-    const locator = await deps.publisher.publish(receipt);
+    const locator = await publishWithRetry(deps.publisher, receipt);
     return {
       ok: false,
       receipt,
@@ -225,8 +231,35 @@ export async function executeJob(
   const payer = resolvePayer(verify, settle, deps.facilitator.feePayer);
   if (payer) receipt.payment.payer = payer;
 
-  const locator = await deps.publisher.publish(receipt);
+  const locator = await publishWithRetry(deps.publisher, receipt);
   return { ok: true, result, receipt, locator, charged: quote.assetAmount };
+}
+
+/**
+ * Publish a receipt, retrying a few times before giving up.
+ *
+ * This is the mitigation for the one genuinely bad outcome in the lifecycle: money has
+ * moved and no record exists. A transient consensus-node error should not be enough to
+ * cause it. If every attempt fails the error propagates — the caller must not report
+ * success for a job whose receipt never landed.
+ */
+async function publishWithRetry(
+  publisher: ReceiptPublisher,
+  receipt: Receipt,
+  attempts = 3,
+): Promise<ReceiptLocator> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      return await publisher.publish(receipt);
+    } catch (err) {
+      lastError = err;
+      if (attempt < attempts) await new Promise((r) => setTimeout(r, 400 * attempt));
+    }
+  }
+  throw new Error(
+    `receipt for job ${receipt.jobId} could not be published after ${attempts} attempts: ${(lastError as Error)?.message}`,
+  );
 }
 
 export class PaymentRejectedError extends Error {

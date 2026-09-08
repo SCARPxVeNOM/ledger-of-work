@@ -218,6 +218,19 @@ credits less than `amount`, so rounding down would under-bill and then fail sett
 The rate is fixed and declared rather than oracle-derived, because a rate that moves
 makes yesterday's receipt unverifiable today.
 
+**Failed jobs settle nothing and are still recorded.** On `exact` there is no
+zero-amount settlement to fall back on, so the only honest response to a job that broke
+is not to charge for it. The receipt is published anyway, with `status: "failed"`,
+`charged: "0"`, no transaction id, and the work that was performed before it broke.
+Receipt [seq 12](https://hashscan.io/testnet/topic/0.0.10413059) is a real one: 57
+seconds of browser work, nothing charged.
+
+The receipt is published *after* settlement, because a receipt written beforehand cannot
+carry a transaction id and binding the result to the payment is its entire purpose. That
+leaves a short window in which a crash would mean a charge with no record; publishing
+retries to narrow it, and fails loudly rather than reporting success if the record never
+lands.
+
 **Receipts fit in one HCS chunk.** Messages over 1024 bytes are split across
 transactions, and the mirror node REST API does not reassemble them. A size assertion
 keeps receipts under the limit so any reader stays simple.

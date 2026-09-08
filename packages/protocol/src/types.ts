@@ -38,7 +38,14 @@ export interface PriceBook {
   ceiling: string;
 }
 
-export type ReceiptKind = "delivery" | "settlement";
+/**
+ * Only delivery receipts are emitted. An earlier design also wrote a second
+ * `settlement` message per job; it was dropped because a receipt published before
+ * settlement cannot carry a transaction id, and binding the result to the payment is the
+ * receipt's entire purpose. Left as a single-member union so adding a kind later is a
+ * visible schema change rather than a silent one.
+ */
+export type ReceiptKind = "delivery";
 export type JobStatus = "ok" | "partial" | "failed";
 
 export interface PaymentRef {

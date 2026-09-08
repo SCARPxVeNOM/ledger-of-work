@@ -4,8 +4,13 @@
   "private": true,
   "type": "module",
   "description": "x402-gated resource server: quote, pay, execute, publish receipt, settle.",
-  "exports": { ".": "./src/index.ts" },
-  "scripts": { "build": "tsc --build", "start": "tsx src/main.ts" },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc --build",
+    "start": "tsx src/main.ts"
+  },
   "dependencies": {
     "@low/protocol": "workspace:*",
     "@low/receipts": "workspace:*",
