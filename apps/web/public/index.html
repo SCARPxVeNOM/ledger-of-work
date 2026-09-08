@@ -1,0 +1,697 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Ledger of Work</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+:root {
+  --paper:      #f2eee3;
+  --paper-deep: #e7e0cf;
+  --ink:        #1a1712;
+  --ink-soft:   #6b6355;
+  --ink-faint:  #9a9182;
+  --rule:       #cfc5ae;
+  --red:        #b3372c;
+  --green:      #2c6e4b;
+  --blue:       #2a4a7b;
+  --stamp:      #b3372c;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --serif: "Instrument Serif", Georgia, "Times New Roman", serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 14px;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Paper grain. Subtle enough to read as texture, not noise. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 100;
+  opacity: .32;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='.5'/%3E%3C/svg%3E");
+}
+
+.sheet { max-width: 1180px; margin: 0 auto; padding: 0 28px 96px; }
+
+/* ── masthead ───────────────────────────────────────────────── */
+header {
+  padding: 44px 0 20px;
+  border-bottom: 3px double var(--ink);
+  margin-bottom: 2px;
+}
+header .rule-under { border-bottom: 1px solid var(--rule); margin-bottom: 26px; height: 6px; }
+h1 {
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: clamp(38px, 6vw, 62px);
+  letter-spacing: -.015em;
+  margin: 0;
+  line-height: .95;
+}
+h1 em { font-style: italic; color: var(--red); }
+.tagline {
+  margin: 12px 0 0;
+  max-width: 62ch;
+  color: var(--ink-soft);
+  font-size: 13px;
+}
+.meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 26px;
+  margin-top: 18px;
+  font-size: 11px;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.meta-row b { color: var(--ink); font-weight: 500; }
+a { color: var(--blue); text-underline-offset: 3px; }
+
+/* ── columns ────────────────────────────────────────────────── */
+.cols { display: grid; grid-template-columns: 400px 1fr; gap: 0; align-items: start; }
+@media (max-width: 940px) { .cols { grid-template-columns: 1fr; } }
+
+.col-left  { padding: 30px 30px 30px 0; border-right: 1px solid var(--rule); }
+.col-right { padding: 30px 0 30px 30px; min-width: 0; }
+@media (max-width: 940px) {
+  .col-left { border-right: 0; border-bottom: 1px solid var(--rule); padding-right: 0; }
+  .col-right { padding-left: 0; }
+}
+
+h2 {
+  font-size: 11px;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 16px;
+  font-weight: 500;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+h2::after { content: ""; flex: 1; border-bottom: 1px solid var(--rule); }
+
+/* ── form ───────────────────────────────────────────────────── */
+label { display: block; font-size: 11px; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-soft); margin: 16px 0 5px; }
+select, input {
+  width: 100%;
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink);
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--ink);
+  padding: 6px 2px;
+  border-radius: 0;
+}
+select:focus, input:focus { outline: 0; border-bottom-width: 2px; padding-bottom: 5px; }
+.params { display: grid; grid-template-columns: 1fr 1fr; gap: 0 18px; }
+
+button {
+  font: inherit;
+  font-size: 12px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  border: 1.5px solid var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+  padding: 11px 18px;
+  margin-top: 26px;
+  width: 100%;
+  transition: transform .1s ease, box-shadow .1s ease;
+  box-shadow: 3px 3px 0 var(--ink-faint);
+}
+button:hover:not(:disabled) { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--ink-faint); }
+button:active:not(:disabled) { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--ink-faint); }
+button:disabled { opacity: .35; cursor: not-allowed; box-shadow: none; }
+button.ghost { background: transparent; color: var(--ink); }
+button.danger { background: transparent; color: var(--red); border-color: var(--red); box-shadow: 3px 3px 0 rgba(179,55,44,.28); }
+.btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+/* ── quote ticket ───────────────────────────────────────────── */
+.ticket {
+  margin-top: 26px;
+  border: 1px solid var(--ink);
+  background: var(--paper-deep);
+  padding: 16px 16px 14px;
+  display: none;
+}
+.ticket.on { display: block; animation: drop .3s cubic-bezier(.2,.8,.3,1); }
+@keyframes drop { from { opacity: 0; transform: translateY(-8px); } }
+.ticket .amt { font-family: var(--serif); font-size: 40px; line-height: 1; }
+.ticket .amt small { font-family: var(--mono); font-size: 11px; letter-spacing: .1em; color: var(--ink-soft); }
+.outline { margin: 12px 0 0; padding: 0; list-style: none; font-size: 12px; color: var(--ink-soft); }
+.outline li { padding-left: 16px; position: relative; }
+.outline li::before { content: "·"; position: absolute; left: 4px; }
+
+/* ── the roll ───────────────────────────────────────────────── */
+.roll {
+  background: repeating-linear-gradient(
+    var(--paper) 0 27px,
+    var(--rule) 27px 27.5px
+  );
+  border: 1px solid var(--rule);
+  border-bottom: 0;
+  min-height: 300px;
+  padding: 14px 18px;
+  position: relative;
+}
+/* torn/perforated bottom edge */
+.roll-edge {
+  height: 12px;
+  background:
+    radial-gradient(circle at 7px 0, transparent 0 5px, var(--rule) 5px 5.6px, transparent 5.7px) repeat-x,
+    linear-gradient(var(--paper), var(--paper));
+  background-size: 14px 12px, 100% 100%;
+  border-inline: 1px solid var(--rule);
+  margin-bottom: 30px;
+}
+.roll-head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  border-bottom: 1px solid var(--ink);
+  padding-bottom: 5px;
+  margin-bottom: 8px;
+}
+.line {
+  display: grid;
+  grid-template-columns: 26px 1fr auto;
+  gap: 12px;
+  align-items: baseline;
+  line-height: 27px;
+  height: 27px;
+  font-size: 12.5px;
+  animation: print .22s ease-out both;
+}
+@keyframes print { from { opacity: 0; transform: translateX(-6px); } }
+.line .n { color: var(--ink-faint); font-size: 11px; }
+.line .what { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); }
+.line .cost { color: var(--ink-soft); font-size: 12px; }
+.line.total { border-top: 1px solid var(--ink); margin-top: 6px; font-weight: 600; }
+.line.total .cost { color: var(--ink); font-size: 14px; }
+.roll .idle { color: var(--ink-faint); line-height: 27px; font-size: 12.5px; }
+
+.meter-big {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  margin: 22px 0 0;
+  padding-top: 12px;
+  border-top: 3px double var(--ink);
+}
+.meter-big .v { font-family: var(--serif); font-size: 46px; line-height: 1; }
+.meter-big .u { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-soft); }
+.pulse { animation: pulse .5s ease; }
+@keyframes pulse { 50% { color: var(--red); transform: scale(1.04); } }
+
+/* ── receipt card ───────────────────────────────────────────── */
+.receipt { margin-top: 34px; display: none; }
+.receipt.on { display: block; }
+.stub {
+  border: 1.5px solid var(--ink);
+  padding: 18px 20px;
+  position: relative;
+  background: var(--paper-deep);
+}
+.kv { display: grid; grid-template-columns: 150px 1fr; gap: 3px 14px; font-size: 12.5px; }
+.kv dt { color: var(--ink-faint); font-size: 11px; letter-spacing: .07em; text-transform: uppercase; }
+.kv dd { margin: 0; word-break: break-all; }
+
+/* rubber stamp */
+.stamp {
+  position: absolute;
+  top: 12px; right: 16px;
+  font-family: var(--serif);
+  font-size: 30px;
+  letter-spacing: .06em;
+  padding: 3px 14px;
+  border: 3px solid currentColor;
+  border-radius: 3px;
+  transform: rotate(-9deg);
+  opacity: 0;
+  pointer-events: none;
+}
+.stamp.show { animation: slam .34s cubic-bezier(.2,1.5,.4,1) forwards; }
+@keyframes slam {
+  0%   { opacity: 0; transform: rotate(-9deg) scale(2.6); }
+  70%  { opacity: .95; transform: rotate(-9deg) scale(.94); }
+  100% { opacity: .88; transform: rotate(-9deg) scale(1); }
+}
+.stamp.ok   { color: var(--green); }
+.stamp.void { color: var(--red); }
+
+/* ── checks ─────────────────────────────────────────────────── */
+.checks { margin-top: 24px; display: none; }
+.checks.on { display: block; }
+.chk {
+  display: grid;
+  grid-template-columns: 62px 1fr;
+  gap: 12px;
+  padding: 7px 0;
+  border-bottom: 1px dotted var(--rule);
+  font-size: 12.5px;
+  animation: print .2s ease-out both;
+}
+.chk .verdict { font-weight: 600; letter-spacing: .1em; font-size: 11px; }
+.chk.pass .verdict { color: var(--green); }
+.chk.fail .verdict { color: var(--red); }
+.chk.fail { background: rgba(179,55,44,.06); }
+.chk .detail { color: var(--ink-faint); font-size: 11.5px; word-break: break-word; }
+.chk .label { color: var(--ink); }
+
+.note {
+  margin-top: 18px;
+  padding: 12px 14px;
+  border-left: 3px solid var(--red);
+  background: rgba(179,55,44,.05);
+  font-size: 12px;
+  color: var(--ink-soft);
+  display: none;
+}
+.note.on { display: block; }
+.err { color: var(--red); font-size: 12.5px; margin-top: 14px; }
+
+footer {
+  margin-top: 10px;
+  padding-top: 18px;
+  border-top: 1px solid var(--rule);
+  font-size: 11px;
+  color: var(--ink-faint);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 26px;
+}
+</style>
+</head>
+<body>
+<div class="sheet">
+
+<header>
+  <h1>Ledger of <em>Work</em></h1>
+  <div class="rule-under"></div>
+  <p class="tagline">
+    Pay-per-job access to websites that can't be turned into an API. Every job is metered
+    by the work it actually performs and receipted on Hedera Consensus Service, so anyone
+    can check what was delivered without trusting the seller.
+  </p>
+  <div class="meta-row">
+    <span>Network <b id="m-net">—</b></span>
+    <span>Scheme <b>exact</b></span>
+    <span>Receipts topic <b><a id="m-topic" target="_blank" rel="noopener">—</a></b></span>
+    <span>Facilitator <b id="m-fac">—</b></span>
+  </div>
+</header>
+
+<div class="cols">
+  <!-- ── left: order ─────────────────────────────────────── -->
+  <section class="col-left">
+    <h2>Order a job</h2>
+
+    <label for="cap">Capability</label>
+    <select id="cap"></select>
+    <div id="cap-desc" style="font-size:11.5px;color:var(--ink-faint);margin-top:7px;min-height:32px"></div>
+
+    <div id="fields"></div>
+
+    <button type="button" id="btn-quote">Get a quote</button>
+
+    <div class="ticket" id="ticket">
+      <div style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft)">Quoted price</div>
+      <div class="amt"><span id="q-amt">0</span> <small>tinybar</small></div>
+      <div style="font-size:11.5px;color:var(--ink-soft);margin-top:6px">
+        priced from <b id="q-steps">0</b> steps · <b id="q-pages">0</b> pages
+      </div>
+      <ul class="outline" id="q-outline"></ul>
+      <button type="button" id="btn-run">Pay &amp; run</button>
+    </div>
+
+    <div class="err" id="err"></div>
+  </section>
+
+  <!-- ── right: the roll ─────────────────────────────────── -->
+  <section class="col-right">
+    <h2>The meter, live</h2>
+
+    <div class="roll">
+      <div class="roll-head"><span>Work performed</span><span>Running charge</span></div>
+      <div id="lines"><div class="idle">No job running. Order one to watch the meter.</div></div>
+      <div class="meter-big">
+        <span class="v" id="m-run">0</span>
+        <span class="u">tinybar<br />running</span>
+      </div>
+    </div>
+    <div class="roll-edge"></div>
+
+    <div class="receipt" id="receipt">
+      <h2>Receipt</h2>
+      <div class="stub">
+        <div class="stamp" id="stamp"></div>
+        <dl class="kv">
+          <dt>Topic</dt><dd><a id="r-topic" target="_blank" rel="noopener"></a></dd>
+          <dt>Sequence</dt><dd id="r-seq"></dd>
+          <dt>Result hash</dt><dd id="r-hash"></dd>
+          <dt>Planned</dt><dd id="r-plan"></dd>
+          <dt>Actual</dt><dd id="r-work"></dd>
+          <dt>Quoted</dt><dd id="r-quoted"></dd>
+          <dt>Charged</dt><dd id="r-charged"></dd>
+          <dt>Paying agent</dt><dd id="r-payer"></dd>
+          <dt>Settlement</dt><dd><a id="r-tx" target="_blank" rel="noopener"></a></dd>
+          <dt>Items returned</dt><dd id="r-items"></dd>
+        </dl>
+      </div>
+
+      <div class="btn-row">
+        <button type="button" id="btn-verify" class="ghost">Verify receipt</button>
+        <button type="button" id="btn-tamper" class="danger">Tamper &amp; re-verify</button>
+      </div>
+
+      <div class="note" id="note">
+        <b>One character of the result was changed.</b> Nothing else was touched — the
+        payment still settled, the price still follows the price book, the receipt is
+        still on the topic. Only the hash no longer matches what was recorded, and that
+        is the whole point: the seller cannot quietly substitute a different answer.
+      </div>
+
+      <div class="checks" id="checks"></div>
+    </div>
+  </section>
+</div>
+
+<footer>
+  <span>Settled through Blocky402 on Hedera testnet</span>
+  <span>Verification reads the public mirror node — no credentials, no seller contact</span>
+  <span><a href="https://github.com/SCARPxVeNOM/ledger-of-work" target="_blank" rel="noopener">Source</a></span>
+</footer>
+</div>
+
+<script type="module">
+const $ = (id) => document.getElementById(id);
+const fmt = (n) => Number(n).toLocaleString("en-US");
+
+let manifest = null;
+let quote = null;
+let lastRun = null;      // { result, receipt, capability }
+let tampered = false;
+
+// ── build the form from the seller's real manifest ──────────────
+async function boot() {
+  try {
+    manifest = await fetch("/api/capabilities").then((r) => r.json());
+  } catch {
+    $("err").textContent = "Cannot reach the seller. Is `pnpm seller` running?";
+    return;
+  }
+
+  $("m-net").textContent = manifest.payment.network;
+  $("m-fac").textContent = new URL(manifest.payment.facilitator).host;
+  const t = $("m-topic");
+  t.textContent = manifest.receipts.topicId;
+  t.href = manifest.receipts.explorer;
+
+  const sel = $("cap");
+  for (const c of manifest.capabilities) {
+    const o = document.createElement("option");
+    o.value = c.name;
+    o.textContent = c.name;
+    sel.append(o);
+  }
+  sel.onchange = renderFields;
+  renderFields();
+}
+
+// Parameter shapes differ per capability; keep them declarative here rather than
+// inferring a schema the manifest does not publish.
+const FIELDS = {
+  "quotes.search_and_extract": [
+    { k: "tag", label: "Tag (blank = all quotes)", type: "text", def: "love" },
+    { k: "max", label: "How many", type: "number", def: 3 },
+  ],
+  "books.filter_catalogue": [
+    { k: "category", label: "Category", type: "text", def: "nonfiction" },
+    { k: "max", label: "How many", type: "number", def: 10 },
+    { k: "maxPrice", label: "Max price (£)", type: "number", def: 30 },
+    { k: "minRating", label: "Min stars", type: "number", def: 4 },
+  ],
+};
+
+function renderFields() {
+  const cap = $("cap").value;
+  const spec = manifest.capabilities.find((c) => c.name === cap);
+  $("cap-desc").textContent = spec ? `${spec.description} — ${new URL(spec.site).host}` : "";
+
+  const wrap = $("fields");
+  wrap.innerHTML = "";
+  const grid = document.createElement("div");
+  grid.className = "params";
+  for (const f of FIELDS[cap] ?? []) {
+    const l = document.createElement("label");
+    l.textContent = f.label;
+    l.htmlFor = `f-${f.k}`;
+    const i = document.createElement("input");
+    i.id = `f-${f.k}`;
+    i.type = f.type;
+    i.value = f.def;
+    i.dataset.key = f.k;
+    const cell = document.createElement("div");
+    cell.append(l, i);
+    grid.append(cell);
+  }
+  wrap.append(grid);
+}
+
+function readParams() {
+  const out = {};
+  for (const i of $("fields").querySelectorAll("input")) {
+    const v = i.value.trim();
+    if (v === "") continue;
+    out[i.dataset.key] = i.type === "number" ? Number(v) : v;
+  }
+  return out;
+}
+
+// ── 1. quote ────────────────────────────────────────────────────
+$("btn-quote").onclick = async () => {
+  $("err").textContent = "";
+  $("btn-quote").disabled = true;
+  try {
+    const res = await fetch("/api/quote", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ capability: $("cap").value, params: readParams() }),
+    });
+    const q = await res.json();
+    if (!res.ok) throw new Error(q.message || q.error || "quote failed");
+
+    quote = q;
+    $("q-amt").textContent = fmt(q.price.amount);
+    $("q-steps").textContent = q.plan.steps;
+    $("q-pages").textContent = q.plan.pages;
+    $("q-outline").innerHTML = "";
+    for (const line of q.plan.outline) {
+      const li = document.createElement("li");
+      li.textContent = line;
+      $("q-outline").append(li);
+    }
+    $("ticket").classList.add("on");
+  } catch (e) {
+    $("err").textContent = e.message;
+  } finally {
+    $("btn-quote").disabled = false;
+  }
+};
+
+// ── 2. pay, run, watch the real meter ───────────────────────────
+$("btn-run").onclick = async () => {
+  if (!quote) return;
+  $("err").textContent = "";
+  $("btn-run").disabled = true;
+  $("btn-quote").disabled = true;
+  $("receipt").classList.remove("on");
+  $("checks").classList.remove("on");
+  $("note").classList.remove("on");
+  $("lines").innerHTML = "";
+  $("m-run").textContent = "0";
+  tampered = false;
+
+  const book = quote.price.priceBook;
+  let n = 0;
+
+  // The seller streams the same counter that produces the price. Subscribing before the
+  // POST would race the job's creation of the stream; the stream replays its history to
+  // a late subscriber for exactly this reason.
+  const runPromise = fetch("/api/run", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ runUrl: quote.run }),
+  });
+
+  const es = new EventSource(quote.events);
+  es.onmessage = (ev) => {
+    const e = JSON.parse(ev.data);
+    if (e.type === "step") {
+      n++;
+      const running =
+        BigInt(book.base) +
+        BigInt(book.perStep) * BigInt(e.steps) +
+        BigInt(book.perPage) * BigInt(e.pages) +
+        BigInt(book.perSecond) * BigInt(Math.ceil(e.sessionMs / 1000));
+      addLine(n, e.label, running);
+      const m = $("m-run");
+      m.textContent = fmt(running);
+      m.classList.remove("pulse");
+      void m.offsetWidth;
+      m.classList.add("pulse");
+    }
+    if (e.type === "done" || e.type === "failed") es.close();
+  };
+  es.onerror = () => es.close();
+
+  try {
+    const res = await runPromise;
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.message || body.error || "job failed");
+
+    lastRun = { result: body.result, receipt: body.receipt, capability: quote.capability, body };
+    addTotal(body.price.charged);
+    $("m-run").textContent = fmt(body.price.charged);
+    showReceipt(body);
+  } catch (e) {
+    $("err").textContent = e.message;
+  } finally {
+    es.close();
+    $("btn-run").disabled = false;
+    $("btn-quote").disabled = false;
+  }
+};
+
+function addLine(n, what, running) {
+  const el = document.createElement("div");
+  el.className = "line";
+  el.innerHTML = `<span class="n">${String(n).padStart(2, "0")}</span>
+                  <span class="what"></span>
+                  <span class="cost">${fmt(running)}</span>`;
+  el.querySelector(".what").textContent = what;
+  $("lines").append(el);
+}
+
+function addTotal(charged) {
+  const el = document.createElement("div");
+  el.className = "line total";
+  el.innerHTML = `<span class="n"></span><span class="what">Charged</span>
+                  <span class="cost">${fmt(charged)}</span>`;
+  $("lines").append(el);
+}
+
+function showReceipt(b) {
+  $("r-topic").textContent = b.receipt.topicId;
+  $("r-topic").href = b.receipt.explorer;
+  $("r-seq").textContent = b.receipt.sequenceNumber;
+  $("r-plan").textContent = `${b.plan.steps} steps, ${b.plan.pages} pages`;
+  $("r-work").textContent = `${b.work.steps} steps, ${b.work.pages} pages, ${b.work.sessionMs} ms`;
+  $("r-quoted").textContent = `${fmt(b.price.quoted)} tinybar`;
+  $("r-charged").textContent = `${fmt(b.price.charged)} tinybar`;
+  $("r-payer").textContent = b.payment.payer;
+  $("r-items").textContent = (b.result.items || []).length;
+  $("r-hash").textContent = "computed at verification";
+  const tx = $("r-tx");
+  tx.textContent = b.payment.txId ?? "—";
+  tx.href = b.payment.txId ? `https://hashscan.io/testnet/transaction/${b.payment.txId}` : "#";
+  $("receipt").classList.add("on");
+  $("stamp").className = "stamp";
+}
+
+// ── 3. verify, and 4. tamper ────────────────────────────────────
+async function verify(result, isTampered) {
+  $("checks").innerHTML = "";
+  $("checks").classList.add("on");
+  $("stamp").className = "stamp";
+
+  const res = await fetch("/api/verify", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      topicId: lastRun.receipt.topicId,
+      sequenceNumber: lastRun.receipt.sequenceNumber,
+      result,
+      capability: lastRun.capability,
+    }),
+  });
+  const out = await res.json();
+
+  // Stamp the checks in one at a time — a verdict that arrives all at once is harder to
+  // read than one that lands line by line.
+  out.checks.forEach((c, i) => {
+    const el = document.createElement("div");
+    el.className = `chk ${c.ok ? "pass" : "fail"}`;
+    el.style.animationDelay = `${i * 55}ms`;
+    el.innerHTML = `<span class="verdict">${c.ok ? "PASS" : "FAIL"}</span>
+                    <span><span class="label"></span><br><span class="detail"></span></span>`;
+    el.querySelector(".label").textContent = c.label;
+    el.querySelector(".detail").textContent = c.detail;
+    $("checks").append(el);
+  });
+
+  const hashCheck = out.checks.find((c) => c.id === "result");
+  if (hashCheck) $("r-hash").textContent = (hashCheck.detail.match(/sha256:[0-9a-f]+/) || ["—"])[0];
+
+  setTimeout(() => {
+    const s = $("stamp");
+    s.textContent = out.ok ? "VERIFIED" : "VOID";
+    s.className = `stamp show ${out.ok ? "ok" : "void"}`;
+  }, out.checks.length * 55 + 120);
+
+  $("note").classList.toggle("on", Boolean(isTampered));
+}
+
+$("btn-verify").onclick = async () => {
+  if (!lastRun) return;
+  tampered = false;
+  $("btn-verify").disabled = true;
+  try { await verify(lastRun.result, false); }
+  finally { $("btn-verify").disabled = false; }
+};
+
+$("btn-tamper").onclick = async () => {
+  if (!lastRun) return;
+  $("btn-tamper").disabled = true;
+  try {
+    // Change exactly one character of one field. Everything else — the payment, the
+    // price, the receipt on chain — is untouched.
+    const copy = structuredClone(lastRun.result);
+    const first = copy.items?.[0];
+    if (first) {
+      const key = "author" in first ? "author" : "title" in first ? "title" : Object.keys(first)[0];
+      first[key] = String(first[key]) + "x";
+    }
+    await verify(copy, true);
+  } finally {
+    $("btn-tamper").disabled = false;
+  }
+};
+
+boot();
+</script>
+</body>
+</html>

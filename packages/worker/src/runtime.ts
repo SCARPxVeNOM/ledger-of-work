@@ -1,6 +1,6 @@
 import { chromium, type Browser, type Page } from "playwright";
 import type { StepLog } from "@low/protocol";
-import { WorkMeter } from "./meter.js";
+import { WorkMeter, type StepEvent } from "./meter.js";
 import { JobAbortedError, type JobContext, type SiteAdapter } from "./types.js";
 
 export interface RunResult<Item> {
@@ -18,6 +18,8 @@ export interface RuntimeOptions {
   headless?: boolean;
   /** Identify ourselves rather than pretending to be a human browser. */
   userAgent?: string;
+  /** Observe the meter as it runs. Used to stream a live count to a watching UI. */
+  onStep?: (event: StepEvent) => void;
 }
 
 export const DEFAULT_USER_AGENT =
@@ -48,7 +50,10 @@ export async function runJob<Params, Item>(
     userAgent: options.userAgent ?? DEFAULT_USER_AGENT,
   });
 
-  const meter = new WorkMeter({ limits: adapter.spec.limits });
+  const meter = new WorkMeter({
+    limits: adapter.spec.limits,
+    ...(options.onStep ? { onStep: options.onStep } : {}),
+  });
   const startedAt = new Date().toISOString();
 
   let page: Page | undefined;

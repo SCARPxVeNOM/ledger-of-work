@@ -78,6 +78,21 @@ importers:
         specifier: workspace:*
         version: link:../../packages/worker
 
+  apps/web:
+    dependencies:
+      '@low/buyer-cli':
+        specifier: workspace:*
+        version: link:../buyer-cli
+      '@low/receipts':
+        specifier: workspace:*
+        version: link:../../packages/receipts
+      '@low/worker':
+        specifier: workspace:*
+        version: link:../../packages/worker
+      dotenv:
+        specifier: ^17.4.2
+        version: 17.4.2
+
   packages/protocol: {}
 
   packages/receipts:

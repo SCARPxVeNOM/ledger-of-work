@@ -4,6 +4,7 @@ import { CATALOGUE, BadParamsError, getCapability } from "@low/worker";
 import { ReceiptPublisher } from "@low/receipts";
 import { chromium, type Browser } from "playwright";
 import { FacilitatorClient, type PaymentPayload } from "./facilitator.js";
+import { JobEventRegistry } from "./events.js";
 import { PaymentRejectedError, QuoteStore, executeJob } from "./jobs.js";
 
 export interface SellerConfig {
@@ -36,6 +37,7 @@ export async function startSeller(config: SellerConfig) {
   // be billed for; each job still gets its own isolated context.
   const browser: Browser = await chromium.launch({ headless: true });
   const quotes = new QuoteStore();
+  const events = new JobEventRegistry();
   const sweeper = setInterval(() => quotes.sweep(), 60_000);
   sweeper.unref();
 
@@ -151,7 +153,22 @@ export async function startSeller(config: SellerConfig) {
         price: { unit: "tinybar", amount, priceBook: adapter.spec.priceBook },
         expiresAt: quote.expiresAt,
         run: `${base}/jobs/${quote.jobId}/run`,
+        events: `${base}/jobs/${quote.jobId}/events`,
       });
+    }
+
+    // --- live progress ---------------------------------------------------------
+    // The UI subscribes here while the paid POST runs, so the meter it shows is the one
+    // actually producing the price.
+    const eventsMatch = /^\/jobs\/([^/]+)\/events$/.exec(path);
+    if (eventsMatch && req.method === "GET") {
+      const streamJobId = eventsMatch[1] as string;
+      // Only for a quote we actually issued, so a bogus id cannot grow the registry.
+      if (!quotes.get(streamJobId) && !events.get(streamJobId)) {
+        return send(res, 404, { error: "no_such_job" });
+      }
+      events.ensure(streamJobId).subscribe(res);
+      return;
     }
 
     // --- pay and run -----------------------------------------------------------
@@ -192,6 +209,8 @@ export async function startSeller(config: SellerConfig) {
       // burn the buyer's quote.
       quotes.consume(jobId);
 
+      const stream = events.ensure(jobId);
+
       try {
         const outcome = await executeJob(quote, payload, requirements, {
           adapter,
@@ -200,7 +219,21 @@ export async function startSeller(config: SellerConfig) {
           browser,
           sellerAccountId: config.sellerAccountId,
           network: config.network,
+          onStep: (e) => stream.fromStep(e),
         });
+
+        stream.emit(
+          outcome.ok
+            ? {
+                type: "done",
+                steps: outcome.receipt.work.steps,
+                pages: outcome.receipt.work.pages,
+                sessionMs: outcome.receipt.work.sessionMs,
+                charged: outcome.receipt.price.charged,
+              }
+            : { type: "failed", message: outcome.error ?? "job failed" },
+        );
+        events.close(jobId);
 
         const receiptBlock = {
           topicId: outcome.locator.topicId,
@@ -237,6 +270,8 @@ export async function startSeller(config: SellerConfig) {
           payment: outcome.receipt.payment,
         });
       } catch (err) {
+        stream.emit({ type: "failed", message: (err as Error).message });
+        events.close(jobId);
         if (err instanceof PaymentRejectedError) {
           return send(res, 402, { error: "payment_rejected", reason: err.reason, message: err.message });
         }

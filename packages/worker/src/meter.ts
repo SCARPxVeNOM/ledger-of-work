@@ -4,10 +4,20 @@ import { JobAbortedError, type CapabilitySpec, type Meter } from "./types.js";
 /** Bounded so a receipt stays inside one 1024-byte HCS chunk. */
 export const MAX_SOURCES = 8;
 
+/** Emitted as each step completes, so a watching UI shows the real meter, not a mock. */
+export interface StepEvent {
+  label: string;
+  steps: number;
+  pages: number;
+  sessionMs: number;
+}
+
 export interface MeterOptions {
   limits: CapabilitySpec["limits"];
   /** Injectable so tests are not at the mercy of a real clock. */
   now?: () => number;
+  /** Called after each step. Must never throw into the job — see the guard below. */
+  onStep?: (event: StepEvent) => void;
 }
 
 /**
@@ -26,10 +36,12 @@ export class WorkMeter implements Meter {
   readonly #start: number;
   readonly #now: () => number;
   readonly #limits: CapabilitySpec["limits"];
+  readonly #onStep: ((event: StepEvent) => void) | undefined;
 
   constructor(options: MeterOptions) {
     this.#limits = options.limits;
     this.#now = options.now ?? Date.now;
+    this.#onStep = options.onStep;
     this.#start = this.#now();
   }
 
@@ -38,7 +50,23 @@ export class WorkMeter implements Meter {
     // counting it would let a flow do unbounded work by failing repeatedly.
     this.#steps += 1;
     this.assertWithinLimits(label);
-    return fn();
+    const result = await fn();
+    this.#emit(label);
+    return result;
+  }
+
+  /**
+   * A watcher must never be able to break a paid job. If a UI disconnects mid-stream and
+   * the emitter throws, the buyer would lose work they had already paid for.
+   */
+  #emit(label: string): void {
+    if (!this.#onStep) return;
+    try {
+      const { steps, pages, sessionMs } = this.snapshot();
+      this.#onStep({ label, steps, pages, sessionMs });
+    } catch {
+      /* a broken observer is not the job's problem */
+    }
   }
 
   countPage(url: string): void {

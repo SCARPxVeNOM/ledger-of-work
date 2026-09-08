@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { hashCanonical, type PriceBook, type Receipt } from "@low/protocol";
-import { JobAbortedError, runJob, type SiteAdapter } from "@low/worker";
+import { JobAbortedError, runJob, type SiteAdapter, type StepEvent } from "@low/worker";
 import type { Browser } from "playwright";
 import type { ReceiptPublisher, ReceiptLocator } from "@low/receipts";
 import {
@@ -83,6 +83,8 @@ export interface ExecuteDeps {
   browser: Browser;
   sellerAccountId: string;
   network: string;
+  /** Observe the meter live. Used by the SSE endpoint the demo UI watches. */
+  onStep?: (event: StepEvent) => void;
 }
 
 export interface ExecuteOutcome {
@@ -126,7 +128,10 @@ export async function executeJob(
   let failure: string | undefined;
 
   try {
-    const run = await runJob(deps.adapter, quote.params, { browser: deps.browser });
+    const run = await runJob(deps.adapter, quote.params, {
+      browser: deps.browser,
+      ...(deps.onStep ? { onStep: deps.onStep } : {}),
+    });
     items = run.items;
     work = { steps: run.work.steps, pages: run.work.pages, sessionMs: run.work.sessionMs };
     sources = run.work.sources;

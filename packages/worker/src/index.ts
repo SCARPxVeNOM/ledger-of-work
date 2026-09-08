@@ -2,7 +2,7 @@ import { booksAdapter } from "./adapters/books.js";
 import { quotesAdapter } from "./adapters/quotes.js";
 import type { SiteAdapter } from "./types.js";
 
-export { MAX_SOURCES, WorkMeter, type MeterOptions } from "./meter.js";
+export { MAX_SOURCES, WorkMeter, type MeterOptions, type StepEvent } from "./meter.js";
 export {
   DEFAULT_USER_AGENT,
   runJob,

@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": { "rootDir": ".", "outDir": "dist" },
+  "references": [
+    { "path": "../buyer-cli" },
+    { "path": "../../packages/receipts" },
+    { "path": "../../packages/worker" }
+  ],
+  "include": ["src/**/*.ts"]
+}

@@ -1,0 +1,14 @@
+{
+  "name": "@low/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Demo UI: order a job, watch the meter, verify the receipt, tamper with it.",
+  "scripts": { "build": "tsc --build", "start": "tsx src/main.ts" },
+  "dependencies": {
+    "@low/buyer-cli": "workspace:*",
+    "@low/receipts": "workspace:*",
+    "@low/worker": "workspace:*",
+    "dotenv": "^17.4.2"
+  }
+}

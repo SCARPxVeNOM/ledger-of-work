@@ -21,7 +21,9 @@
     "buy": "tsx apps/buyer-cli/src/main.ts",
     "verify": "tsx apps/verifier/src/main.ts",
     "smoke:worker": "tsx scripts/smoke-worker.mjs",
-    "mcp": "tsx apps/mcp/src/main.ts"
+    "mcp": "tsx apps/mcp/src/main.ts",
+    "web": "tsx apps/web/src/main.ts",
+    "demo": "tsx apps/seller/src/main.ts & tsx apps/web/src/main.ts"
   },
   "devDependencies": {
     "@hiero-ledger/sdk": "^2.87.0",
