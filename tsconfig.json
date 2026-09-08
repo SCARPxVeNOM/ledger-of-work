@@ -27,6 +27,9 @@
     },
     {
       "path": "./apps/wallet"
+    },
+    {
+      "path": "./apps/verify-page"
     }
   ]
 }

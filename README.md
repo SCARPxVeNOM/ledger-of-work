@@ -60,6 +60,7 @@ independently verified.
 | `apps/wallet` — the buyer's wallet as its own process | done |
 | `apps/mcp` — MCP server for buying agents | done |
 | `apps/web` — demo UI | done |
+| `apps/verify-page` — the verifier as a static page, no backend | done |
 | HTS token as payment asset | done |
 | Agent card on Hedera File Service | done |
 
@@ -188,6 +189,27 @@ pnpm verify --topic <id> --seq <n> --result ./result.json \
 
 The verifier needs no credentials and never contacts the seller. It reads the public
 mirror node, so anyone can run it — including someone who assumes the seller is lying.
+
+### In a browser, with nothing installed
+
+`pnpm build:page` produces an 8 KB static site that runs the verifier entirely in the
+browser against the public mirror node — no backend, no account, no key. It shares
+`verifyReceipt` verbatim with the CLI rather than reimplementing the checks, because two
+verifiers would eventually disagree and a disagreement between two things that both claim
+to prove delivery is worse than having one.
+
+Making that possible meant splitting the trust core: `@low/protocol/portable` is
+everything that runs anywhere, and hashing — the one part needing a platform primitive —
+lives outside it. Node hashes with `node:crypto`, the browser with Web Crypto, and both
+hash the *same* canonical bytes because the encoding is shared code.
+
+A receipt is shareable as a link:
+
+```
+?topic=0.0.10413059&seq=14&submitter=0.0.10410493&capability=virgo.catalogue_search
+```
+
+See [`docs/DEPLOY.md`](docs/DEPLOY.md). Publishing it is one repository setting.
 
 ### As an agent, over MCP
 

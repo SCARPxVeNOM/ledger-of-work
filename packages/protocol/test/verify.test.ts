@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { fitsOneChunk, verifyReceipt } from "../src/verify.js";
 import { canonicalByteLength } from "../src/canonical.js";
+import { hashCanonical } from "../src/hash.js";
 import { HCS_CHUNK_BYTES } from "../src/types.js";
 import {
   BUYER,
@@ -21,7 +22,7 @@ function verifyFixture(over: {
 } = {}) {
   const receipt = makeReceipt(over.receipt);
   return verifyReceipt({
-    result: "result" in over ? over.result : RESULT,
+    resultHash: hashCanonical("result" in over ? over.result : RESULT),
     message: makeMessage(receipt, over.message),
     transaction: makeTransaction(receipt, over.transaction),
     expectedSubmitter: SELLER,
@@ -128,7 +129,7 @@ describe("verifyReceipt — a verifier that only ever passes is not evidence", (
     // in agreement and the check would pass vacuously.
     const forged = makeReceipt({ payment: { ...makeReceipt().payment, payer: "0.0.4242" } });
     const out = verifyReceipt({
-      result: RESULT,
+      resultHash: hashCanonical(RESULT),
       message: makeMessage(forged),
       transaction: makeTransaction(makeReceipt()), // real buyer, real amount
       expectedSubmitter: SELLER,
@@ -162,7 +163,7 @@ describe("verifyReceipt — a verifier that only ever passes is not evidence", (
   it("stops early and does not pretend to verify an unparseable payload", () => {
     const receipt = makeReceipt();
     const out = verifyReceipt({
-      result: RESULT,
+      resultHash: hashCanonical(RESULT),
       message: makeMessage(receipt, { message: Buffer.from("not json").toString("base64") }),
       expectedSubmitter: SELLER,
       priceBook: PRICE_BOOK,
@@ -187,7 +188,7 @@ describe("verifyReceipt — a verifier that only ever passes is not evidence", (
   it("does not claim the payment is verified when no transaction was supplied", () => {
     const receipt = makeReceipt();
     const out = verifyReceipt({
-      result: RESULT,
+      resultHash: hashCanonical(RESULT),
       message: makeMessage(receipt),
       expectedSubmitter: SELLER,
       priceBook: PRICE_BOOK,
@@ -198,7 +199,7 @@ describe("verifyReceipt — a verifier that only ever passes is not evidence", (
   it("does not claim the meter is verified when no price book was supplied", () => {
     const receipt = makeReceipt();
     const out = verifyReceipt({
-      result: RESULT,
+      resultHash: hashCanonical(RESULT),
       message: makeMessage(receipt),
       transaction: makeTransaction(receipt),
       expectedSubmitter: SELLER,

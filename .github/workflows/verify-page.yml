@@ -1,0 +1,57 @@
+# Publish the static verifier to GitHub Pages.
+#
+# The verifier is the one artifact that is useful to a stranger with no setup: it reads
+# the public mirror node from their browser, needs no account, and never contacts the
+# seller. Hosting it is what turns "you could verify this" into "here, verify it".
+name: verify-page
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/verify-page/**"
+      - "packages/protocol/**"
+      - "packages/worker/src/pricebooks.ts"
+      - ".github/workflows/verify-page.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # The bundle embeds published price books, and a drift between those and what the
+      # seller charges would make the meter check verify against a price nobody paid.
+      # The test that catches it runs before anything is published.
+      - run: pnpm test
+      - run: pnpm --filter @low/verify-page build
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: apps/verify-page/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4

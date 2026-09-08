@@ -1,3 +1,15 @@
+/**
+ * Everything in the trust core that runs anywhere.
+ *
+ * The split is deliberate and enforced rather than conventional: this entry point
+ * excludes `hash.ts`, which is the only module needing a platform primitive. A browser
+ * build imports from here and supplies its own Web Crypto digest, and because the
+ * *encoding* the hash is taken over lives on this side of the line, the two runtimes
+ * cannot drift apart in the way that would actually matter.
+ *
+ * If something added here ever pulls in `node:`, the browser bundle fails loudly at
+ * build time — which is the point of having the boundary be a file rather than a habit.
+ */
 export {
   HBAR,
   HBAR_ASSET,
@@ -7,7 +19,6 @@ export {
   type AssetSpec,
 } from "./assets.js";
 export { canonical, canonicalByteLength } from "./canonical.js";
-export { hashCanonical, sha256 } from "./hash.js";
 export {
   TINYBAR_PER_HBAR,
   consensusTimestampToMillis,

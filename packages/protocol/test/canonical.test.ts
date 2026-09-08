@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { canonical, canonicalByteLength, hashCanonical } from "../src/canonical.js";
+import { canonical, canonicalByteLength } from "../src/canonical.js";
+import { hashCanonical } from "../src/hash.js";
 
 describe("canonical", () => {
   it("is stable under key insertion order", () => {

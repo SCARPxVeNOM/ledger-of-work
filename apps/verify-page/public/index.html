@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Verify a Ledger of Work receipt</title>
+<meta name="description" content="Check that a result matches its on-chain receipt. Reads the public Hedera mirror node. No account, no install, no trust in the seller." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+:root {
+  --paper: #f2eee3; --paper-deep: #e7e0cf; --ink: #1a1712;
+  --ink-soft: #6b6355; --ink-faint: #9a9182; --rule: #cfc5ae;
+  --red: #b3372c; --green: #2c6e4b; --blue: #2a4a7b;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+  --serif: "Instrument Serif", Georgia, serif;
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; background: var(--paper); color: var(--ink);
+  font-family: var(--mono); font-size: 14px; line-height: 1.5;
+  font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased;
+}
+body::before {
+  content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 100; opacity: .3;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='.5'/%3E%3C/svg%3E");
+}
+.sheet { max-width: 880px; margin: 0 auto; padding: 0 28px 90px; }
+header { padding: 46px 0 18px; border-bottom: 3px double var(--ink); }
+h1 { font-family: var(--serif); font-weight: 400; font-size: clamp(34px, 5.5vw, 54px); margin: 0; line-height: .95; letter-spacing: -.015em; }
+h1 em { font-style: italic; color: var(--red); }
+.tagline { margin: 14px 0 0; max-width: 64ch; color: var(--ink-soft); font-size: 13px; }
+h2 { font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-faint); margin: 34px 0 16px; font-weight: 500; display: flex; align-items: baseline; gap: 10px; }
+h2::after { content: ""; flex: 1; border-bottom: 1px solid var(--rule); }
+label { display: block; font-size: 11px; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-soft); margin: 16px 0 5px; }
+input, select { width: 100%; font: inherit; font-size: 13px; color: var(--ink); background: transparent; border: 0; border-bottom: 1px solid var(--ink); padding: 6px 2px; border-radius: 0; }
+input[type=file] { border-bottom: 0; padding-left: 0; font-size: 12px; }
+input:focus, select:focus { outline: 0; border-bottom-width: 2px; padding-bottom: 5px; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 22px; }
+@media (max-width: 640px) { .grid { grid-template-columns: 1fr; } }
+button { font: inherit; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; cursor: pointer; border: 1.5px solid var(--ink); background: var(--ink); color: var(--paper); padding: 12px 18px; margin-top: 28px; width: 100%; box-shadow: 3px 3px 0 var(--ink-faint); transition: transform .1s, box-shadow .1s; }
+button:hover:not(:disabled) { transform: translate(-1px,-1px); box-shadow: 4px 4px 0 var(--ink-faint); }
+button:active:not(:disabled) { transform: translate(2px,2px); box-shadow: 1px 1px 0 var(--ink-faint); }
+button:disabled { opacity: .35; cursor: not-allowed; box-shadow: none; }
+details { margin-top: 20px; border-top: 1px solid var(--rule); padding-top: 12px; }
+summary { cursor: pointer; font-size: 11px; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-faint); }
+.panel { margin-top: 30px; position: relative; }
+.stamp { position: absolute; top: -6px; right: 4px; font-family: var(--serif); font-size: 30px; letter-spacing: .06em; padding: 3px 14px; border: 3px solid currentColor; border-radius: 3px; transform: rotate(-9deg); opacity: 0; pointer-events: none; }
+.stamp.show { animation: slam .34s cubic-bezier(.2,1.5,.4,1) forwards; }
+@keyframes slam { 0% { opacity: 0; transform: rotate(-9deg) scale(2.6); } 70% { opacity: .95; transform: rotate(-9deg) scale(.94); } 100% { opacity: .88; transform: rotate(-9deg) scale(1); } }
+.stamp.ok { color: var(--green); } .stamp.void { color: var(--red); }
+.chk { display: grid; grid-template-columns: 62px 1fr; gap: 12px; padding: 8px 0; border-bottom: 1px dotted var(--rule); font-size: 12.5px; animation: print .2s ease-out both; }
+@keyframes print { from { opacity: 0; transform: translateX(-6px); } }
+.chk .verdict { font-weight: 600; letter-spacing: .1em; font-size: 11px; }
+.chk.pass .verdict { color: var(--green); }
+.chk.fail .verdict { color: var(--red); }
+.chk.fail { background: rgba(179,55,44,.06); }
+.chk .detail { color: var(--ink-faint); font-size: 11.5px; word-break: break-word; }
+#evidence { display: flex; flex-direction: column; gap: 4px; margin-top: 14px; font-size: 11.5px; word-break: break-all; }
+a { color: var(--blue); text-underline-offset: 3px; }
+.err { color: var(--red); font-size: 12.5px; margin-top: 14px; }
+footer { margin-top: 44px; padding-top: 18px; border-top: 1px solid var(--rule); font-size: 11px; color: var(--ink-faint); }
+</style>
+</head>
+<body>
+<div class="sheet">
+
+<header>
+  <h1>Verify a <em>receipt</em></h1>
+  <p class="tagline">
+    Check that a result matches what was recorded on chain, that the retrieval happened
+    when claimed, that the payment settled for the amount stated, and that the price
+    follows the seller's published book. This page reads the public Hedera mirror node
+    from your browser. It never contacts the seller, needs no account, and works if you
+    assume the seller is lying.
+  </p>
+</header>
+
+<h2>The receipt</h2>
+<div class="grid">
+  <div>
+    <label for="topic">Topic id</label>
+    <input id="topic" placeholder="0.0.10413059" value="0.0.10413059" />
+  </div>
+  <div>
+    <label for="seq">Sequence number</label>
+    <input id="seq" type="number" placeholder="14" />
+  </div>
+  <div>
+    <label for="submitter">Seller account</label>
+    <input id="submitter" placeholder="0.0.10410493" value="0.0.10410493" />
+  </div>
+  <div>
+    <label for="capability">Capability (enables the meter check)</label>
+    <select id="capability"><option value="">— skip the meter check —</option></select>
+  </div>
+</div>
+
+<label for="result">The result file you were given</label>
+<input id="result" type="file" accept="application/json,.json" />
+
+<details>
+  <summary>Settled in a token, or a different network?</summary>
+  <div class="grid">
+    <div><label for="asset">Asset id</label><input id="asset" placeholder="0.0.0 for HBAR" /></div>
+    <div><label for="assetSymbol">Symbol</label><input id="assetSymbol" placeholder="WORK" /></div>
+    <div><label for="assetDecimals">Decimals</label><input id="assetDecimals" type="number" placeholder="2" /></div>
+    <div><label for="assetRate">Units per tinybar</label><input id="assetRate" placeholder="0.001" /></div>
+    <div style="grid-column:1/-1"><label for="mirror">Mirror node</label><input id="mirror" placeholder="https://testnet.mirrornode.hedera.com/api/v1" /></div>
+  </div>
+</details>
+
+<button type="button" id="go">Verify</button>
+<div class="err" id="error"></div>
+
+<div class="panel" id="result-panel" hidden>
+  <div class="stamp" id="stamp"></div>
+  <h2>Checks</h2>
+  <div id="checks"></div>
+  <h2>Evidence — open these yourself</h2>
+  <div id="evidence"></div>
+</div>
+
+<footer>
+  Ledger of Work ·
+  <a href="https://github.com/SCARPxVeNOM/ledger-of-work" target="_blank" rel="noopener">source</a> ·
+  the checks run here are the same code the command-line verifier runs
+</footer>
+</div>
+<script type="module" src="./verify.js"></script>
+</body>
+</html>

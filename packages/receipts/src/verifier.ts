@@ -1,4 +1,5 @@
 import {
+  hashCanonical,
   toRestTxId,
   verifyReceipt,
   type CheckResult,
@@ -73,7 +74,9 @@ export async function verifyFromMirror(
   }
 
   const output = verifyReceipt({
-    result: request.result,
+    // Hashing happens here rather than inside verifyReceipt, so that function stays
+    // synchronous and portable enough to bundle for the browser verifier.
+    resultHash: hashCanonical(request.result),
     message,
     expectedSubmitter: request.expectedSubmitter,
     priceBook: request.priceBook,

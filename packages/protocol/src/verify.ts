@@ -1,5 +1,5 @@
 import { isHbar, tinybarToAssetUnits, type AssetSpec } from "./assets.js";
-import { canonical, hashCanonical } from "./canonical.js";
+import { canonical } from "./canonical.js";
 import { consensusTimestampToMillis } from "./hedera.js";
 import { price } from "./price.js";
 import {
@@ -32,8 +32,16 @@ export interface MirrorTransaction {
 }
 
 export interface VerifyInput {
-  /** The result the buyer holds, parsed. Hashed and compared against the receipt. */
-  result: unknown;
+  /**
+   * `sha256:<hex>` over the canonical encoding of the result the buyer holds.
+   *
+   * Taken precomputed rather than hashing here, because hashing is the only part of this
+   * check that needs a platform primitive: Node has `node:crypto`, a browser has Web
+   * Crypto, and only the latter is async. Keeping it out means this whole function stays
+   * synchronous and portable, and the CLI and the browser page share it verbatim instead
+   * of maintaining two verifiers that could drift apart.
+   */
+  resultHash: string;
   /** The HCS message at the receipt locator. */
   message: MirrorTopicMessage;
   /** The account the service is expected to submit receipts from. */
@@ -101,8 +109,7 @@ export function verifyReceipt(input: VerifyInput): VerifyOutput {
   // 3. The payload parses as a receipt we understand.
   let receipt: Receipt;
   try {
-    const decoded = Buffer.from(input.message.message, "base64").toString("utf8");
-    receipt = JSON.parse(decoded) as Receipt;
+    receipt = JSON.parse(decodeBase64Utf8(input.message.message)) as Receipt;
   } catch (err) {
     add("parse", "Receipt parses", false, `undecodable: ${(err as Error).message}`);
     return { ok: false, checks };
@@ -119,7 +126,7 @@ export function verifyReceipt(input: VerifyInput): VerifyOutput {
   }
 
   // 4. The integrity claim: the bytes the buyer holds are the bytes that were recorded.
-  const actualHash = hashCanonical(input.result);
+  const actualHash = input.resultHash;
   add(
     "result",
     "Result matches the recorded hash",
@@ -249,5 +256,19 @@ export function verifyReceipt(input: VerifyInput): VerifyOutput {
  * assert it where receipts are built rather than discovering it in production.
  */
 export function fitsOneChunk(receipt: Receipt): boolean {
-  return Buffer.byteLength(canonical(receipt), "utf8") <= HCS_CHUNK_BYTES;
+  return new TextEncoder().encode(canonical(receipt)).length <= HCS_CHUNK_BYTES;
+}
+
+/**
+ * Decode base64 to a UTF-8 string in either runtime.
+ *
+ * `atob` alone mangles multi-byte characters — it yields one char per byte — so the
+ * bytes are rebuilt and decoded properly. A receipt with an accented author name would
+ * otherwise hash differently in the browser than in the CLI.
+ */
+function decodeBase64Utf8(b64: string): string {
+  if (typeof Buffer !== "undefined") return Buffer.from(b64, "base64").toString("utf8");
+  const binary = atob(b64);
+  const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
+  return new TextDecoder("utf-8").decode(bytes);
 }

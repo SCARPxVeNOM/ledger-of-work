@@ -26,7 +26,9 @@
     "demo": "tsx apps/seller/src/main.ts & tsx apps/web/src/main.ts",
     "wallet": "tsx apps/wallet/src/main.ts",
     "usage": "tsx scripts/usage.mjs",
-    "survey": "node scripts/survey-sites.mjs"
+    "survey": "node scripts/survey-sites.mjs",
+    "verify:page": "pnpm --filter @low/verify-page serve",
+    "build:page": "pnpm --filter @low/verify-page build"
   },
   "devDependencies": {
     "@hiero-ledger/sdk": "^2.87.0",

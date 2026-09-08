@@ -4,6 +4,8 @@ import { MAX_SOURCES, WorkMeter } from "../src/meter.js";
 import { JobAbortedError } from "../src/types.js";
 import { booksAdapter } from "../src/adapters/books.js";
 import { quotesAdapter } from "../src/adapters/quotes.js";
+import { CATALOGUE } from "../src/index.js";
+import { PRICE_BOOKS } from "../src/pricebooks.js";
 
 const LIMITS = { maxSteps: 5, maxPages: 3, maxSessionMs: 10_000 };
 
@@ -191,5 +193,22 @@ describe("parameter validation", () => {
   it("applies documented defaults", () => {
     const q = quotesAdapter.normalise({ tag: "love" });
     expect(q).toEqual({ tag: "love", max: 10, login: true });
+  });
+});
+
+describe("published price books", () => {
+  it("match every adapter's own price book exactly", () => {
+    // The verifier reads PRICE_BOOKS while the seller charges from spec.priceBook. If
+    // they drift, the meter check verifies against a price nobody was charged — which
+    // would be a verifier that passes on a receipt it should reject.
+    for (const [name, adapter] of Object.entries(CATALOGUE)) {
+      expect(PRICE_BOOKS[name], `no published price book for ${name}`).toEqual(
+        adapter.spec.priceBook,
+      );
+    }
+  });
+
+  it("publishes a book for every capability and no extras", () => {
+    expect(Object.keys(PRICE_BOOKS).sort()).toEqual(Object.keys(CATALOGUE).sort());
   });
 });

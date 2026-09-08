@@ -1,4 +1,4 @@
-import { hashCanonical } from "../src/canonical.js";
+import { hashCanonical } from "../src/hash.js";
 import type { MirrorTopicMessage, MirrorTransaction } from "../src/verify.js";
 import type { PriceBook, Receipt } from "../src/types.js";
 

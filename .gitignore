@@ -28,3 +28,5 @@ SETUP.md
 idea*.md
 resourcelinks.png
 .data/
+apps/verify-page/dist/
+apps/verify-page/dist-types/

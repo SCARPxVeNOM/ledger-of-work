@@ -1,5 +1,3 @@
-import { createHash } from "node:crypto";
-
 /**
  * Canonical JSON encoding, RFC 8785 in spirit: object keys sorted, no insignificant
  * whitespace, `undefined` members dropped exactly as `JSON.stringify` drops them.
@@ -39,17 +37,12 @@ export function canonical(value: unknown): string {
   return `{${body}}`;
 }
 
-/** SHA-256 of the canonical encoding, prefixed with its algorithm. */
-export function hashCanonical(value: unknown): string {
-  return sha256(Buffer.from(canonical(value), "utf8"));
-}
-
-/** SHA-256 of raw bytes, prefixed with its algorithm (`sha256:<hex>`). */
-export function sha256(bytes: Buffer | string): string {
-  return `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
-}
-
-/** Byte length of the canonical encoding — used to keep receipts inside one HCS chunk. */
+/**
+ * Byte length of the canonical encoding — used to keep receipts inside one HCS chunk.
+ *
+ * TextEncoder rather than Buffer so this module stays runnable in a browser; the
+ * verifier is bundled for one, and a Node-only helper here would drag `Buffer` into it.
+ */
 export function canonicalByteLength(value: unknown): number {
-  return Buffer.byteLength(canonical(value), "utf8");
+  return new TextEncoder().encode(canonical(value)).length;
 }

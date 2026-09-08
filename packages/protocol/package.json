@@ -5,7 +5,8 @@
   "type": "module",
   "description": "Pure trust core: receipt schema, canonical hashing, work-based pricing, and the verifier checks. No network, no SDK, no browser.",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./portable": "./src/portable.ts"
   },
   "scripts": {
     "build": "tsc --build"
