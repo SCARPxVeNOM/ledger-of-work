@@ -23,3 +23,9 @@ export {
   type FullVerifyOutput,
   type VerifyRequest,
 } from "./verifier.js";
+export {
+  formatUsage,
+  readUsage,
+  summariseUsage,
+  type UsageReport,
+} from "./usage.js";

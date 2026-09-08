@@ -4,7 +4,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { PaymentRequirements } from "@low/buyer-cli";
-import { verifyFromMirror } from "@low/receipts";
+import { readUsage, verifyFromMirror } from "@low/receipts";
 import { CATALOGUE } from "@low/worker";
 
 /**
@@ -94,6 +94,22 @@ const server = createServer(async (req, res) => {
         return send(res, 200, { connected: true, ...(w as object) });
       } catch {
         return send(res, 200, { connected: false, url: WALLET });
+      }
+    }
+
+    // Usage read from the public topic, so the page shows the same numbers a sceptic
+    // would compute themselves rather than anything this server asserts.
+    if (path === "/api/usage") {
+      const topicId = process.env.SELLER_TOPIC_ID;
+      if (!topicId) return send(res, 200, { available: false });
+      try {
+        const report = await readUsage(topicId, {
+          ...(process.env.MIRROR_NODE_URL ? { baseUrl: process.env.MIRROR_NODE_URL } : {}),
+          limit: 100,
+        });
+        return send(res, 200, { available: true, ...report });
+      } catch (err) {
+        return send(res, 200, { available: false, error: (err as Error).message });
       }
     }
 

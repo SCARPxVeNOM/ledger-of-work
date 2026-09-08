@@ -24,7 +24,9 @@
     "mcp": "tsx apps/mcp/src/main.ts",
     "web": "tsx apps/web/src/main.ts",
     "demo": "tsx apps/seller/src/main.ts & tsx apps/web/src/main.ts",
-    "wallet": "tsx apps/wallet/src/main.ts"
+    "wallet": "tsx apps/wallet/src/main.ts",
+    "usage": "tsx scripts/usage.mjs",
+    "survey": "node scripts/survey-sites.mjs"
   },
   "devDependencies": {
     "@hiero-ledger/sdk": "^2.87.0",
