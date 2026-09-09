@@ -52,6 +52,20 @@ export interface VerifyInput {
    */
   pageHash?: string | undefined;
   screenshotHash?: string | undefined;
+  /**
+   * `sha256:<hex>` over the retrieval proof the buyer received, hashed by the caller for
+   * the same reason `resultHash` is.
+   */
+  retrievalProofHash?: string | undefined;
+  /**
+   * Whether that proof actually covers the answer sold, decided by the caller.
+   *
+   * Passed in rather than computed here because it needs to parse the proof, and this
+   * module is deliberately the one thing both verifiers share verbatim. The *signature*
+   * check cannot live here at all — it needs the attestor SDK and is asynchronous — so a
+   * caller that can verify signatures appends that check itself.
+   */
+  retrievalCoverage?: { ok: boolean; detail: string } | undefined;
   /** The HCS message at the receipt locator. */
   message: MirrorTopicMessage;
   /** The account the service is expected to submit receipts from. */
@@ -178,7 +192,60 @@ export function verifyReceipt(input: VerifyInput): VerifyOutput {
       "page",
       "Page HTML matches the recorded hash",
       false,
-      "this v2 receipt records no evidence — the page could not be captured",
+      `this v${receipt.v} receipt records no evidence — the page could not be captured`,
+    );
+  }
+
+  // 4c. Whether a third party will vouch for the response.
+  //
+  // Everything checked so far is seller-produced: fabricate the answer, hash the
+  // fabrication, screenshot the fabrication, and it all still passes. This is the only
+  // check whose subject is a signature we could not have produced.
+  //
+  // Reported the same three ways as the evidence, and for a stronger reason: a receipt
+  // with no retrieval proof is exactly as trustworthy as the seller, which is what this
+  // whole exercise exists to stop assuming.
+  if (receipt.retrieval) {
+    if (input.retrievalProofHash === undefined) {
+      add(
+        "retrieval-hash",
+        "Retrieval proof is the one the receipt committed to",
+        false,
+        `not checked — supply the proof to compare against ${receipt.retrieval.proofHash}`,
+      );
+    } else {
+      const matches = input.retrievalProofHash === receipt.retrieval.proofHash;
+      add(
+        "retrieval-hash",
+        "Retrieval proof is the one the receipt committed to",
+        matches,
+        matches
+          ? receipt.retrieval.proofHash
+          : `computed ${input.retrievalProofHash}, receipt claims ${receipt.retrieval.proofHash}`,
+      );
+    }
+
+    if (input.retrievalCoverage === undefined) {
+      add(
+        "retrieval-coverage",
+        "The witnessed response covers the answer sold",
+        false,
+        `not checked — supply the proof returned beside the result, which the receipt commits to as ${receipt.retrieval.proofHash}`,
+      );
+    } else {
+      add(
+        "retrieval-coverage",
+        "The witnessed response covers the answer sold",
+        input.retrievalCoverage.ok,
+        input.retrievalCoverage.detail,
+      );
+    }
+  } else if (receipt.v >= 3) {
+    add(
+      "retrieval-hash",
+      "Retrieval proof is the one the receipt committed to",
+      false,
+      "this receipt carries no retrieval proof — the answer is only as good as the seller's word",
     );
   }
 

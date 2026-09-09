@@ -77,8 +77,12 @@ try {
 const artifactBase = resultPath.replace(/\.json$/, "");
 const pagePath = `${artifactBase}.page.html`;
 const shotPath = `${artifactBase}.screenshot.png`;
+const proofPath = `${artifactBase}.proof.json`;
 const pageHtml = existsSync(pagePath) ? readFileSync(pagePath, "utf8") : undefined;
 const screenshot = existsSync(shotPath) ? readFileSync(shotPath) : undefined;
+const retrievalProof = existsSync(proofPath)
+  ? JSON.parse(readFileSync(proofPath, "utf8"))
+  : undefined;
 
 // Read the published price books, not the live catalogue. A verifier is asked about a
 // receipt that already exists, and that receipt may name a capability we have since
@@ -105,6 +109,7 @@ const out = await verifyFromMirror(
     ...(asset ? { asset } : {}),
     ...(pageHtml !== undefined ? { pageHtml } : {}),
     ...(screenshot ? { screenshot } : {}),
+    ...(retrievalProof ? { retrievalProof } : {}),
   },
   mirrorUrl ? { baseUrl: mirrorUrl } : {},
 );

@@ -23,6 +23,11 @@ export interface SellerConfig {
   agentCardFileId?: string | undefined;
   /** Optional HTS asset a buyer may pay in instead of HBAR. */
   paymentToken?: AssetSpec | undefined;
+  /**
+   * Owns the retrieval proofs this seller produces. Absent, jobs run exactly as before
+   * and receipts simply carry no third-party witness.
+   */
+  zkOwnerKey?: string | undefined;
 }
 
 export async function startSeller(config: SellerConfig) {
@@ -272,6 +277,7 @@ export async function startSeller(config: SellerConfig) {
           sellerAccountId: config.sellerAccountId,
           network: config.network,
           onStep: (e) => stream.fromStep(e),
+          ...(config.zkOwnerKey ? { zkOwnerKey: config.zkOwnerKey } : {}),
         });
 
         stream.emit(
@@ -315,6 +321,7 @@ export async function startSeller(config: SellerConfig) {
           // the receipt's evidence commitment is unfalsifiable, which is the opposite of
           // the point.
           ...(outcome.artifacts ? { artifacts: outcome.artifacts } : {}),
+          ...(outcome.retrievalProof ? { retrievalProof: outcome.retrievalProof } : {}),
           evidence: outcome.receipt.evidence,
           receipt: receiptBlock,
           price: {

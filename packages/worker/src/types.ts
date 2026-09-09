@@ -71,6 +71,26 @@ export interface SiteAdapter<Params, Item> {
   parse(html: string): Item[];
   /** Drives the browser. Every navigation goes through `ctx.meter.step`. */
   run(ctx: JobContext<import("playwright").Page>, params: Params): Promise<Item[]>;
+  /**
+   * Which single response carries the answer, so an attestor can be asked to witness it.
+   *
+   * Optional, and honestly so: zkTLS proves one HTTPS response, while most of these jobs
+   * are multi-step sessions whose answer is assembled from several. An adapter that
+   * cannot point at one response should not implement this, and an adapter that can
+   * should return null whenever this particular job's answer did not come from one —
+   * a paginated run, say. Returning something unprovable is worse than returning
+   * nothing, because a failed proof attempt costs the buyer time for no benefit.
+   *
+   * `mustContain` must be text the raw response body actually holds. Extracted values
+   * are read from the rendered DOM, which is not the same string when the page renders
+   * client-side, and an attestor asked to find text that is not in the bytes will simply
+   * refuse.
+   */
+  provable?(
+    params: Params,
+    items: Item[],
+    context: { finalUrl: string; html: string },
+  ): { url: string; mustContain: string } | null;
 }
 
 export class JobAbortedError extends Error {

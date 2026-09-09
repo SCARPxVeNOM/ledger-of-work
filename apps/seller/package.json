@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@low/protocol": "workspace:*",
+    "@low/proof": "workspace:*",
     "@low/receipts": "workspace:*",
     "@low/worker": "workspace:*",
     "playwright": "^1.63.0",

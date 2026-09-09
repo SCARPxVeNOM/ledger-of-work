@@ -100,6 +100,7 @@ const paid = await fetch(quote.run, { method: "POST", headers: { "payment-signat
 const body = (await paid.json()) as {
   result?: unknown;
   artifacts?: { html: string; screenshotBase64: string };
+  retrievalProof?: unknown;
   evidence?: { pageHash: string; screenshotHash: string; finalUrl: string };
   receipt?: { topicId: string; sequenceNumber: number; explorer: string };
   price?: { quoted: string; charged: string; unit?: string };
@@ -132,6 +133,16 @@ if (body.artifacts) {
   artifactNote = `
   page    -> ${base}.page.html
   shot    -> ${base}.screenshot.png`;
+}
+
+// The attestor's signed claim. Kept beside the result for the same reason as the page
+// and the screenshot: the receipt commits to its hash, so the buyer needs the bytes to
+// check the commitment — and this is the one artifact whose signature we could not have
+// forged.
+if (body.retrievalProof) {
+  writeFileSync(`${base}.proof.json`, JSON.stringify(body.retrievalProof, null, 2));
+  artifactNote += `
+  proof   -> ${base}.proof.json`;
 }
 
 console.log(`\ndone in ${Date.now() - t0}ms`);

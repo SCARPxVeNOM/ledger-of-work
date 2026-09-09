@@ -8,6 +8,7 @@
   "scripts": { "build": "tsc --build" },
   "dependencies": {
     "@low/protocol": "workspace:*",
+    "@low/proof": "workspace:*",
     "@hiero-ledger/sdk": "^2.87.0"
   }
 }

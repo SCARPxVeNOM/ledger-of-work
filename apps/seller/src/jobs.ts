@@ -1,5 +1,19 @@
-import { hashCanonical, sha256, type EvidenceRef, type Receipt } from "@low/protocol";
-import { JobAbortedError, runJob, type SiteAdapter, type StepEvent } from "@low/worker";
+import {
+  hashCanonical,
+  sha256,
+  type EvidenceRef,
+  type Receipt,
+  type RetrievalRef,
+  RECEIPT_VERSION,
+} from "@low/protocol";
+import { proveRetrieval, summarise, type RetrievalProof } from "@low/proof";
+import {
+  DEFAULT_USER_AGENT,
+  JobAbortedError,
+  runJob,
+  type SiteAdapter,
+  type StepEvent,
+} from "@low/worker";
 import type { Browser } from "playwright";
 import type { ReceiptLocator, ReceiptPublisher } from "@low/receipts";
 import type { Quote } from "./quote-store.js";
@@ -21,6 +35,11 @@ export interface ExecuteDeps {
   network: string;
   /** Observe the meter live. Used by the SSE endpoint the demo UI watches. */
   onStep?: (event: StepEvent) => void;
+  /**
+   * Enables retrieval proofs. Without it, jobs still run and receipts still publish —
+   * they simply carry no third-party witness, and the verifier says so.
+   */
+  zkOwnerKey?: string;
 }
 
 export interface ExecuteOutcome {
@@ -28,6 +47,8 @@ export interface ExecuteOutcome {
   result?: unknown;
   /** Artifacts the buyer needs to check the evidence hashes themselves. */
   artifacts?: { html: string; screenshotBase64: string };
+  /** The attestor's signed claim, far too large for a receipt. Hashed into it instead. */
+  retrievalProof?: RetrievalProof;
   receipt: Receipt;
   locator: ReceiptLocator;
   charged: string;
@@ -69,6 +90,8 @@ export async function executeJob(
   let sources: string[] = [];
   let evidence: EvidenceRef | undefined;
   let artifacts: { html: string; screenshotBase64: string } | undefined;
+  let retrieval: RetrievalRef | undefined;
+  let retrievalProof: RetrievalProof | undefined;
   let startedAt = new Date().toISOString();
   let finishedAt = startedAt;
   let failure: string | undefined;
@@ -89,12 +112,35 @@ export async function executeJob(
         pageHash: sha256(Buffer.from(run.evidence.html, "utf8")),
         screenshotHash: sha256(run.evidence.screenshot),
         finalUrl: run.evidence.finalUrl,
-        capturedAt: run.evidence.capturedAt,
       };
       artifacts = {
         html: run.evidence.html,
         screenshotBase64: run.evidence.screenshot.toString("base64"),
       };
+
+      // Ask a third party to vouch for the response, if this capability can point at one
+      // and we have a key to own the proof with.
+      //
+      // Deliberately after the answer exists and deliberately unable to fail the job: a
+      // buyer who paid for a capture that succeeded must get their capture even if an
+      // attestor is down. The receipt then carries no `retrieval`, and the verifier
+      // reports that as unproven rather than quietly passing.
+      const target = deps.adapter.provable?.(quote.params, run.items, {
+        finalUrl: run.evidence.finalUrl,
+        html: run.evidence.html,
+      });
+      if (target && deps.zkOwnerKey) {
+        const proof = await proveRetrieval({
+          url: target.url,
+          mustContain: target.mustContain,
+          ownerPrivateKey: deps.zkOwnerKey,
+          headers: { "user-agent": DEFAULT_USER_AGENT, accept: "text/html" },
+        });
+        if (proof) {
+          retrievalProof = proof;
+          retrieval = summarise(proof);
+        }
+      }
     }
   } catch (err) {
     // A job that failed still did work, and that work is part of the record. But we do
@@ -117,7 +163,7 @@ export async function executeJob(
   const resultHash = failure ? "sha256:" + "0".repeat(64) : hashCanonical(result);
 
   const receipt: Receipt = {
-    v: 2,
+    v: RECEIPT_VERSION,
     kind: "delivery",
     jobId: quote.jobId,
     capability: quote.capability,
@@ -133,6 +179,7 @@ export async function executeJob(
     work,
     price: { unit: quote.asset.id === "0.0.0" ? "tinybar" : quote.asset.symbol, quoted: quote.assetAmount, charged },
     ...(evidence ? { evidence } : {}),
+    ...(retrieval ? { retrieval } : {}),
     payment: {
       network: deps.network,
       scheme: "exact",
@@ -172,7 +219,15 @@ export async function executeJob(
   if (payer) receipt.payment.payer = payer;
 
   const locator = await publishWithRetry(deps.publisher, receipt);
-  return { ok: true, result, ...(artifacts ? { artifacts } : {}), receipt, locator, charged: quote.assetAmount };
+  return {
+    ok: true,
+    result,
+    ...(artifacts ? { artifacts } : {}),
+    ...(retrievalProof ? { retrievalProof } : {}),
+    receipt,
+    locator,
+    charged: quote.assetAmount,
+  };
 }
 
 /**

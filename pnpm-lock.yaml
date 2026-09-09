@@ -62,6 +62,9 @@ importers:
 
   apps/seller:
     dependencies:
+      '@low/proof':
+        specifier: workspace:*
+        version: link:../../packages/proof
       '@low/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
@@ -130,6 +133,24 @@ importers:
         specifier: ^17.4.2
         version: 17.4.2
 
+  packages/proof:
+    dependencies:
+      '@low/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+      '@reclaimprotocol/attestor-core':
+        specifier: ^5.1.4
+        version: 5.1.4
+      '@reclaimprotocol/tls':
+        specifier: ^0.1.4
+        version: 0.1.4
+      '@reclaimprotocol/zk-symmetric-crypto':
+        specifier: ^5.1.6
+        version: 5.1.6(@reclaimprotocol/tls@0.1.4)(koffi@2.16.3)(p-queue@8.1.1)(snarkjs@0.7.6)
+      snarkjs:
+        specifier: ^0.7.6
+        version: 0.7.6
+
   packages/protocol: {}
 
   packages/receipts:
@@ -137,6 +158,9 @@ importers:
       '@hiero-ledger/sdk':
         specifier: ^2.87.0
         version: 2.87.0(bn.js@5.2.3)
+      '@low/proof':
+        specifier: workspace:*
+        version: link:../proof
       '@low/protocol':
         specifier: workspace:*
         version: link:../protocol

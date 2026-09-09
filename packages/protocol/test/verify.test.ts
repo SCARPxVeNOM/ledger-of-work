@@ -13,6 +13,7 @@ import {
   makeMessage,
   makeReceipt,
   makeTransaction,
+  RETRIEVAL,
 } from "./fixtures.js";
 
 function verifyFixture(over: {
@@ -318,5 +319,112 @@ describe("fitting a receipt into one chunk", () => {
   it("throws rather than publishing a chunked receipt it cannot shrink", () => {
     const impossible = makeReceipt({ capability: "x".repeat(1200), sources: [] });
     expect(() => fitReceipt(impossible)).toThrow(/cannot fit one/);
+  });
+});
+
+describe("retrieval proofs — the only check the seller cannot manufacture", () => {
+  // v3 evidence carries no `capturedAt` — see the type. The seller stopped writing it
+  // when the retrieval commitment arrived and the byte budget ran out.
+  const v3 = (over: Partial<Parameters<typeof makeReceipt>[0]> = {}) =>
+    makeReceipt({
+      v: 3,
+      retrieval: RETRIEVAL,
+      evidence: { ...EVIDENCE, capturedAt: undefined },
+      ...over,
+    });
+
+  const run = (
+    receipt: ReturnType<typeof makeReceipt>,
+    extra: { retrievalProofHash?: string; retrievalCoverage?: { ok: boolean; detail: string } } = {},
+  ) =>
+    verifyReceipt({
+      resultHash: hashCanonical(RESULT),
+      pageHash: EVIDENCE.pageHash,
+      screenshotHash: EVIDENCE.screenshotHash,
+      message: makeMessage(receipt),
+      transaction: makeTransaction(receipt),
+      expectedSubmitter: SELLER,
+      priceBook: PRICE_BOOK,
+      ...extra,
+    });
+
+  const check = (out: ReturnType<typeof run>, id: string) => out.checks.find((c) => c.id === id);
+
+  it("passes when the buyer's proof is the one committed to and it covers the answer", () => {
+    const out = run(v3(), {
+      retrievalProofHash: RETRIEVAL.proofHash,
+      retrievalCoverage: { ok: true, detail: "witnessed" },
+    });
+    expect(check(out, "retrieval-hash")?.ok).toBe(true);
+    expect(check(out, "retrieval-coverage")?.ok).toBe(true);
+    expect(out.ok).toBe(true);
+  });
+
+  it("fails when a different proof is presented", () => {
+    const out = run(v3(), {
+      retrievalProofHash: `sha256:${"00".repeat(32)}`,
+      retrievalCoverage: { ok: true, detail: "witnessed" },
+    });
+    expect(check(out, "retrieval-hash")?.ok).toBe(false);
+    expect(out.ok).toBe(false);
+  });
+
+  it("fails when the proof is genuine but does not cover the answer", () => {
+    // The subtle attack: witness a real page, deliver something it does not say.
+    const out = run(v3(), {
+      retrievalProofHash: RETRIEVAL.proofHash,
+      retrievalCoverage: { ok: false, detail: "not in the delivered answer" },
+    });
+    expect(check(out, "retrieval-coverage")?.ok).toBe(false);
+    expect(out.ok).toBe(false);
+  });
+
+  it("reports unproven, not fine, when the buyer supplies no proof", () => {
+    const out = run(v3());
+    expect(check(out, "retrieval-hash")?.ok).toBe(false);
+    expect(check(out, "retrieval-hash")?.detail).toContain("not checked");
+    expect(check(out, "retrieval-coverage")?.detail).toContain("not checked");
+  });
+
+  it("says so when a v3 receipt carries no proof at all", () => {
+    const out = run(makeReceipt({ v: 3 }));
+    expect(check(out, "retrieval-hash")?.ok).toBe(false);
+    expect(check(out, "retrieval-hash")?.detail).toContain("only as good as the seller's word");
+    expect(check(out, "retrieval-coverage")).toBeUndefined();
+  });
+
+  it("does not invent retrieval checks for older receipts", () => {
+    // v1 and v2 receipts predate proofs entirely. Failing them for lacking a field that
+    // did not exist would be a verifier that rejects its own history.
+    for (const v of [1, 2]) {
+      const out = run(makeReceipt({ v, ...(v === 1 ? { evidence: undefined } : {}) }));
+      expect(check(out, "retrieval-hash"), `v${v} invented a retrieval check`).toBeUndefined();
+    }
+  });
+
+  it("fits one HCS chunk with evidence and a retrieval commitment together", () => {
+    expect(fitsOneChunk(v3({ sources: [] }))).toBe(true);
+  });
+
+  it("has almost no headroom left, and this test is the alarm", () => {
+    // 1024 bytes is the hard limit — a receipt over it is split into chunks, and the
+    // mirror REST API does not reassemble them, so it becomes unverifiable by the very
+    // people it exists for. A v3 receipt with both commitments spends nearly all of it.
+    //
+    // If this number moves, a field was added. That is allowed, but it costs sources:
+    // decide deliberately rather than discovering it when a receipt fails to publish.
+    const bytes = canonicalByteLength(v3({ sources: [] }));
+    expect(bytes).toBeLessThanOrEqual(HCS_CHUNK_BYTES);
+    // ~969 today. Room for roughly one source URL and nothing else.
+    expect(HCS_CHUNK_BYTES - bytes).toBeLessThan(120);
+  });
+
+  it("sheds sources rather than overflowing when a v3 job touched many pages", () => {
+    const bloated = v3({
+      sources: Array.from({ length: 10 }, (_, i) => `https://www.whitehouse.gov/presidential-actions/page/${i}/`),
+    });
+    const { receipt, droppedSources } = fitReceipt(bloated);
+    expect(fitsOneChunk(receipt)).toBe(true);
+    expect(droppedSources).toBeGreaterThan(0);
   });
 });

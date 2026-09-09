@@ -40,6 +40,7 @@ export {
   type PriceBook,
   type Receipt,
   type ReceiptKind,
+  type RetrievalRef,
   type StepLog,
 } from "./types.js";
 export {

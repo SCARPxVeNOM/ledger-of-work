@@ -1,0 +1,19 @@
+{
+  "name": "@low/proof",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Produces and checks zkTLS retrieval proofs: evidence that a response genuinely came from the source, witnessed by an independent attestor.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./portable": "./src/portable.ts"
+  },
+  "scripts": { "build": "tsc --build" },
+  "dependencies": {
+    "@low/protocol": "workspace:*",
+    "@reclaimprotocol/attestor-core": "^5.1.4",
+    "@reclaimprotocol/tls": "^0.1.4",
+    "@reclaimprotocol/zk-symmetric-crypto": "^5.1.6",
+    "snarkjs": "^0.7.6"
+  }
+}

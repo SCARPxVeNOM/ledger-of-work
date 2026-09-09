@@ -37,6 +37,14 @@ const CLICK_DELAY_MS = 400;
 /** Longest value we will return per match. Guards the receipt and the result file alike. */
 const MAX_VALUE_CHARS = 400;
 
+/**
+ * How much of the captured value the attestor is asked to confirm.
+ *
+ * Long enough that a match is distinctive rather than incidental — `"start"` would be
+ * true of half the web — and short enough that revealing it stays cheap.
+ */
+const PROOF_MATCH_CHARS = 48;
+
 interface AllowedSource {
   host: string;
   /** Path prefixes the site's robots.txt disallows. Checked before we navigate. */
@@ -259,6 +267,34 @@ export const oracleAdapter: SiteAdapter<OracleParams, CapturedClaim> = {
    */
   parse(valuesBlock: string): CapturedClaim[] {
     return tidyValues(valuesBlock.split("\n\n"), Number.MAX_SAFE_INTEGER);
+  },
+
+  /**
+   * This capability is the one worth proving, and the one that is cheap to prove.
+   *
+   * A capture is a single GET of a public document — no credentials to hide, so the
+   * whole TLS transcript can be revealed and no ZK proving is needed. Measured at 2.1s
+   * for a 263KB page, against 28s for a 40KB response behind a bearer token where eight
+   * ZK proofs were required to keep the token secret.
+   *
+   * Only the first value is witnessed. Each extra one costs another revealed slice, and
+   * a dispute turns on a specific claim rather than on a list.
+   */
+  provable(
+    _params: OracleParams,
+    items: CapturedClaim[],
+    context: { finalUrl: string; html: string },
+  ): { url: string; mustContain: string } | null {
+    const first = items[0]?.value;
+    if (!first) return null;
+
+    // The attestor matches against the raw response body, while `value` was read from
+    // the rendered DOM. On a client-rendered page the two differ and the attestor would
+    // refuse; say so by returning null rather than making it find out the slow way.
+    const needle = first.slice(0, PROOF_MATCH_CHARS);
+    if (!context.html.includes(needle)) return null;
+
+    return { url: context.finalUrl, mustContain: needle };
   },
 
   async run(ctx: JobContext<Page>, params: OracleParams): Promise<CapturedClaim[]> {

@@ -32,6 +32,7 @@ const seller = await startSeller({
   paymentToken,
   agentCardFileId: process.env.AGENT_CARD_FILE_ID,
   quoteStorePath: process.env.QUOTE_STORE_PATH ?? ".data/quotes.json",
+  zkOwnerKey: process.env.ZKTLS_OWNER_KEY,
 });
 
 console.log(`seller listening on http://localhost:${seller.port}`);
@@ -43,6 +44,9 @@ if (process.env.AGENT_CARD_FILE_ID) {
 }
 console.log(
   `  assets     HBAR${paymentToken ? ` + ${paymentToken.symbol} (${paymentToken.id}) at ${paymentToken.unitsPerTinybar} units/tinybar` : ""}`,
+);
+console.log(
+  `  proofs     ${process.env.ZKTLS_OWNER_KEY ? "on — capable jobs get an attestor's signature" : "off — set ZKTLS_OWNER_KEY to witness retrievals"}`,
 );
 
 for (const sig of ["SIGINT", "SIGTERM"] as const) {

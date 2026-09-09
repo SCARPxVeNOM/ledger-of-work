@@ -2,7 +2,7 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": { "rootDir": ".", "outDir": "dist" },
   "references": [
-    { "path": "../../packages/protocol" },
+    { "path": "../../packages/protocol" }, { "path": "../../packages/proof" },
     { "path": "../../packages/worker" },
     { "path": "../../packages/receipts" }
   ],

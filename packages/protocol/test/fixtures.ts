@@ -39,11 +39,18 @@ export const EVIDENCE = {
   capturedAt: "2026-09-08T04:12:09.900Z",
 };
 
-export function makeReceipt(overrides: Partial<Receipt> = {}): Receipt {
+/** A retrieval commitment the size a real one is — see packages/proof for the genuine article. */
+export const RETRIEVAL = { proofHash: `sha256:${"ef".repeat(32)}` };
+
+export function makeReceipt(
+  overrides: Partial<Record<keyof Receipt, unknown>> = {},
+): Receipt {
   return {
     v: 2,
     kind: "delivery",
-    jobId: "01JBQZK4T9XN2M7V0S3H8WQPCD",
+    // A UUID, because that is what the seller actually generates — 10 bytes longer than
+    // a ULID, and the byte-budget test is worthless if the fixture is the cheap case.
+    jobId: "47f7f63d-4c1d-4b69-9419-6c7ae90e8ef4",
     capability: "quotes.search_and_extract",
     resultHash: hashCanonical(RESULT),
     sources: ["https://quotes.toscrape.com/tag/love/", "https://quotes.toscrape.com/tag/love/page/2/"],
@@ -63,7 +70,7 @@ export function makeReceipt(overrides: Partial<Receipt> = {}): Receipt {
     },
     status: "ok",
     ...overrides,
-  };
+  } as Receipt;
 }
 
 export function makeMessage(

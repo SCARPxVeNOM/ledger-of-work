@@ -1,6 +1,6 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": { "rootDir": ".", "outDir": "dist" },
-  "references": [{ "path": "../protocol" }, { "path": "../proof" }],
+  "references": [{ "path": "../protocol" }],
   "include": ["src/**/*.ts", "test/**/*.ts"]
 }

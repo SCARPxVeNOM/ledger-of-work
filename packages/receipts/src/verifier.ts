@@ -9,6 +9,12 @@ import {
   type Receipt,
   type VerifyOutput,
 } from "@low/protocol";
+import {
+  checkCoverage,
+  checkRetrievalProof,
+  hashProof,
+  type RetrievalProof,
+} from "@low/proof";
 import { MirrorClient, type MirrorClientOptions } from "./mirror.js";
 
 export interface VerifyRequest {
@@ -28,6 +34,12 @@ export interface VerifyRequest {
    */
   pageHtml?: string;
   screenshot?: Buffer;
+  /**
+   * The retrieval proof the buyer was given. Omit it and the retrieval checks report
+   * unproven — including the signature check, which is the only one whose subject the
+   * seller could not have manufactured.
+   */
+  retrievalProof?: RetrievalProof;
 }
 
 export interface FullVerifyOutput extends VerifyOutput {
@@ -80,6 +92,28 @@ export async function verifyFromMirror(
     }
   }
 
+  // Decide the retrieval questions that need the proof in hand. The hash and the
+  // coverage go into the shared verifier so the browser page reports them identically;
+  // the signature check is appended afterwards because it is asynchronous and needs the
+  // attestor SDK, neither of which the portable core can have.
+  const peekedRetrieval = (() => {
+    try {
+      const r = JSON.parse(Buffer.from(message.message, "base64").toString("utf8")) as Receipt;
+      return { url: r.evidence?.finalUrl, hasRetrieval: Boolean(r.retrieval) };
+    } catch {
+      return { url: undefined, hasRetrieval: false };
+    }
+  })();
+
+  const coverage =
+    request.retrievalProof && peekedRetrieval.url
+      ? checkCoverage({
+          proof: request.retrievalProof,
+          expectedUrl: peekedRetrieval.url,
+          answer: JSON.stringify(request.result),
+        })
+      : undefined;
+
   const output = verifyReceipt({
     // Hashing happens here rather than inside verifyReceipt, so that function stays
     // synchronous and portable enough to bundle for the browser verifier.
@@ -90,6 +124,8 @@ export async function verifyFromMirror(
       ? { pageHash: sha256(Buffer.from(request.pageHtml, "utf8")) }
       : {}),
     ...(request.screenshot ? { screenshotHash: sha256(request.screenshot) } : {}),
+    ...(request.retrievalProof ? { retrievalProofHash: hashProof(request.retrievalProof) } : {}),
+    ...(coverage ? { retrievalCoverage: coverage } : {}),
     message,
     expectedSubmitter: request.expectedSubmitter,
     priceBook: request.priceBook,
@@ -97,11 +133,37 @@ export async function verifyFromMirror(
     transaction,
   });
 
-  const checks: CheckResult[] = transactionError
+  let checks: CheckResult[] = transactionError
     ? output.checks.map((c) =>
         c.id === "payment" ? { ...c, ok: false, detail: `could not resolve settlement: ${transactionError}` } : c,
       )
     : output.checks;
+
+  // The signature. Appended rather than folded in above because it is the one check that
+  // cannot be synchronous, and it is worth having at all only because the key that made
+  // the signature is not ours.
+  if (output.receipt?.retrieval) {
+    if (request.retrievalProof) {
+      const proofChecks = await checkRetrievalProof({
+        proof: request.retrievalProof,
+        ref: output.receipt.retrieval,
+        expectedUrl: output.receipt.evidence?.finalUrl ?? "",
+        answer: JSON.stringify(request.result),
+      });
+      const signature = proofChecks.find((c) => c.id === "proof-signature");
+      if (signature) checks = [...checks, signature];
+    } else {
+      checks = [
+        ...checks,
+        {
+          id: "proof-signature",
+          label: "An independent attestor signed this claim",
+          ok: false,
+          detail: `not checked — supply the proof the seller returned alongside the result`,
+        },
+      ];
+    }
+  }
 
   // Use the shared converter rather than an inline replace — the whole reason
   // toRestTxId exists is that hand-rolled versions corrupt the account id.

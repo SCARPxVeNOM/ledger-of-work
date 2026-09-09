@@ -1,13 +1,14 @@
 /**
  * Receipt schema version. Bump on any field change — an immutable log cannot be migrated.
  *
- * v2 added `evidence`. Receipts already written at v1 stay readable and verifiable
- * forever, because the alternative to supporting them is a log with a hole in it.
+ * v2 added `evidence`; v3 added `retrieval`. Receipts already written at v1 stay readable
+ * and verifiable forever, because the alternative to supporting them is a log with a hole
+ * in it.
  */
-export const RECEIPT_VERSION = 2;
+export const RECEIPT_VERSION = 3;
 
 /** Versions this build can read. Anything else is refused rather than guessed at. */
-export const SUPPORTED_RECEIPT_VERSIONS = [1, 2] as const;
+export const SUPPORTED_RECEIPT_VERSIONS = [1, 2, 3] as const;
 
 /** HCS caps a single message chunk at 1024 bytes; the REST API does not reassemble chunks. */
 export const HCS_CHUNK_BYTES = 1024;
@@ -92,11 +93,51 @@ export interface EvidenceRef {
   screenshotHash: string;
   /** Where the browser actually ended up, which may differ from where it was sent. */
   finalUrl: string;
-  capturedAt: string;
+  /**
+   * When the page was captured. Dropped from v3 onward: it was always within a few
+   * milliseconds of `finishedAt`, which the receipt already carries, and at v3 the
+   * budget is tight enough that 40 bytes of restated fact is 40 bytes of sources.
+   * Still read on v2 receipts, which have it.
+   */
+  capturedAt?: string;
+}
+
+/**
+ * A commitment to a third party's word that the response was real.
+ *
+ * The evidence bundle is all seller-produced, so a seller willing to fabricate can
+ * fabricate it coherently. This is the one field on the receipt that is not: an
+ * independent attestor observed the TLS session and signed for it, and we do not hold
+ * the key that produced that signature.
+ *
+ * The proof itself is a few kilobytes and cannot go in a 1024-byte receipt, so it is
+ * returned to the buyer alongside the result and only its hash is committed here —
+ * exactly as the result payload is handled.
+ *
+ * Absent whenever the attestor could not be reached, refused, or the source needs
+ * credentials we will not hand to a third party. A verifier must read its absence as
+ * unproven, never as fine.
+ */
+export interface RetrievalRef {
+  /**
+   * `sha256:<hex>` over the canonical encoding of the proof handed to the buyer.
+   *
+   * A pointer and nothing else, for the same reason `resultHash` is: the proof runs to
+   * several kilobytes and the whole receipt gets 1024 bytes. Who signed it and what they
+   * matched on are both *in* the proof, and a checker cannot do anything without holding
+   * the proof anyway — so restating either here would spend real budget, measured at 56
+   * and 61 bytes, to repeat what the verifier already has in hand.
+   *
+   * This was not a free choice. A v3 receipt carrying both this and the evidence hashes
+   * came to 1026 bytes against a hard 1024-byte chunk limit, and HCS messages that span
+   * chunks cannot be read back through the mirror REST API at all — which would make the
+   * receipt unverifiable by exactly the people it exists for.
+   */
+  proofHash: string;
 }
 
 export interface Receipt {
-  /** 1 for receipts written before evidence existed; 2 onwards carry it. */
+  /** 1 for receipts written before evidence existed; 2 adds it, 3 adds retrieval proof. */
   v: number;
   kind: ReceiptKind;
   jobId: string;
@@ -136,6 +177,11 @@ export interface Receipt {
    * verifier must treat "no evidence" as "unproven", never as "fine".
    */
   evidence?: EvidenceRef;
+  /**
+   * Absent on v1 and v2, and on v3 jobs where no proof could be obtained. Unproven, not
+   * fine — see `RetrievalRef`.
+   */
+  retrieval?: RetrievalRef;
   status: JobStatus;
 }
 
