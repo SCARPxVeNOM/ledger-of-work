@@ -1,46 +1,97 @@
 # Ledger of Work
 
-**Pay-per-job access to websites that can't be turned into an API, with a receipt anyone
-can verify.**
+**Proof of what a paid agent service delivered — demonstrated on web jobs, because those
+are the hardest to verify.**
 
-Built for the AI & Agentic Payments on Hedera track — an x402-gated service settled
-through the [Blocky402](https://blocky402.com/) facilitator, with delivery receipts on
-Hedera Consensus Service.
+When software buys data from software, the buyer receives bytes and nothing else. It has
+no instinct for "that number looks wrong", no way to check, and the payment has already
+settled. This makes every job leave a record on Hedera that anyone can check without
+trusting the seller.
 
-## The problem
+Built for the AI & Agentic Payments on Hedera track — x402 settlement through the
+[Blocky402](https://blocky402.com/) facilitator, receipts on Hedera Consensus Service.
 
-Two gaps, and this sits at their intersection.
+## What the receipt proves, and what it does not
 
-**Most of the web has no API.** An agent that needs a number off a site has to log in,
-type into a search box, apply filters, page through results, and read one value at the
-end. That isn't a fetch — it's a job. Every existing pay-per-call web service prices a
-single page fetch, so the whole category of multi-step work is unserved.
+Read this before anything else, because the distinction is the whole product.
 
-**A paying agent can't tell whether it got the real thing.** When an agent pays for web
-data it receives bytes and nothing else. The data could be stale, cached, partially
-failed, or fabricated. The payment already settled. Nothing ties the delivered result to
-a real retrieval event.
+**It proves** — each of these is a check the verifier runs, and each can fail:
 
-## What it does
+- the answer you hold is the answer that was recorded; change one character and it fails
+- the record was written when it claims, and cannot be backdated
+- the payment settled for exactly the amount stated
+- the price follows a price book published *before* the job ran
+- the job was recorded by the seller's account, not forged by a third party
 
-Accepts a *job* rather than a URL, executes it against a live website, charges for the
-work actually performed, and returns the result with a verifiable receipt.
+**It does not prove the data is true.** The receipt commits to what the seller *returned*.
+A dishonest seller could fabricate an answer and hash the fabrication faithfully, and
+every check above would still pass. If the site itself was wrong, the receipt records a
+wrong answer perfectly.
 
-**The worker** runs a defined multi-step flow against a target site — search, filter,
-paginate, extract — and returns structured output.
+So the accurate claim today is **tamper-evidence, not proof of retrieval**: the seller
+must commit publicly, at the moment of delivery, before knowing whether anyone will
+challenge it — and cannot revise that story afterwards. That is genuinely useful and
+narrower than "verified data".
+
+Closing that gap properly means proving the retrieval itself, not just the delivery. See
+[Proving retrieval](#proving-retrieval-not-just-delivery) for where that stands.
+
+## Why web jobs
+
+Because they are the worst case, which makes them the right demonstration.
+
+**Most of the web has no usable API.** An agent that needs a number off a site has to log
+in, type into a search box, apply filters, page through results, and read one value at the
+end. That isn't a fetch — it's a job. Every existing pay-per-call service prices a single
+page fetch, so multi-step work is unserved.
+
+**And nobody can check the result.** There is no invoice, no audit trail, nothing tying
+the bytes to a retrieval event. If that can be made checkable here, it can be made
+checkable anywhere.
+
+## How it works
+
+**The worker** runs a defined multi-step flow against a target site — log in, search,
+filter, paginate, extract — and returns structured output.
 
 **The meter** derives price from work done: steps executed, pages traversed, session
-time. A job that resolves in two steps costs less than one that takes nine.
+time. A two-step job costs less than a nine-step one, and the unit prices are published
+in advance so a buyer can compute the price themselves.
 
-**The receipt** publishes a record to an HCS topic for every job: hash of the result,
-source URLs, timestamps, which capability ran, how many steps it took, the price charged,
-the payment reference, and the paying agent. The receipt carries the *hash*, not the
-payload, so integrity is provable without republishing content that isn't ours to
-redistribute.
+**The receipt** records, for every job: a hash of the result, the source URLs,
+timestamps, which capability ran, the work performed, the price charged, the payment
+reference, and the paying agent. Hashes rather than payloads, so integrity is provable
+without republishing content that isn't ours to redistribute.
 
-Anyone can take a result plus a receipt and confirm the two match, that the retrieval
-happened when claimed, and that the price corresponds to the work recorded. The seller
-can't quietly edit history.
+## Proving retrieval, not just delivery
+
+The honest gap above has a known fix, and the research for it is done.
+
+[zkTLS](https://blog.reclaimprotocol.org/posts/zk-in-zktls) proves that a byte-string
+genuinely came from a site's TLS session — which is exactly the thing a hash of our own
+output cannot do. The obstacle looked fatal: zkTLS proves a *single* HTTPS response,
+while these jobs are multi-step browser sessions.
+
+Watching the network says otherwise. Virgo renders its results from one request:
+
+```
+POST https://pool-solr-ws-uva-library.internal.lib.virginia.edu/api/search  ->  40,877 bytes JSON
+```
+
+So the split is **the browser does the navigating; zkTLS proves the response carrying the
+answer**. `@reclaimprotocol/attestor-core` runs server-side, supports POST with a body and
+custom headers, and takes a `cookieStr` — so a session the browser established can be
+replayed through an independent attestor that witnesses the TLS exchange.
+
+Two caveats, stated now rather than discovered later:
+
+- It introduces a **witness, not mathematics**. The claim becomes "an independent attestor
+  observed this session", not "this is unforgeable". Much better than today; not absolute.
+- It would prove the answer-bearing response, not the clicking that reached it.
+
+Status: **researched and specified, not built.** Attempting it is the current piece of
+work, on a hard timebox — see the plan in the commit history. If it does not land, this
+section says so rather than quietly disappearing.
 
 ## Status
 

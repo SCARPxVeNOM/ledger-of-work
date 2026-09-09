@@ -33,6 +33,31 @@ improvising — the fallback is a self-hosted facilitator, which is a slower sto
 
 ---
 
+## Open with the thing that can fail (30s)
+
+Do not start with the product. Start with a receipt going red, because a demo where
+nothing can fail proves nothing.
+
+Have a completed job on screen before you begin. Click **Tamper & re-verify**.
+
+> I changed one character of the answer. Nine checks stay green — the payment settled,
+> the price follows the published book, the record is still on chain. Only the hash no
+> longer matches, and the receipt is stamped VOID.
+>
+> That is the product. Everything else is how the receipt got there.
+
+Then say the limitation out loud, before anyone finds it:
+
+> What this proves is that the seller cannot change their story after the fact. It does
+> **not** prove the data is true — we hash what we return, so a dishonest seller could
+> fabricate an answer and hash the fabrication. Closing that means proving the retrieval
+> itself with zkTLS, and the README has the research for it.
+
+You will lose nothing by saying this and a great deal by being caught not saying it. A
+judge who finds a hidden limitation discounts everything else you claimed.
+
+---
+
 ## Claim 1 — this is a job, not a fetch (60s)
 
 Open **http://localhost:8403**.
@@ -70,18 +95,12 @@ Ten checks stamp in green, then a VERIFIED stamp.
 > book. This is running against the public mirror node — no credentials, and it never
 > asks the seller anything.
 
-Now **Tamper & re-verify.**
+> You saw this go red at the start. Now you know what was behind it: a real multi-step
+> job, priced by the work it took, settled on chain — and a record the seller committed
+> to before knowing anyone would look.
 
-> One character of one field changed. Nothing else touched.
-
-Nine checks stay green. The hash check goes red. A VOID stamp lands on the receipt.
-
-> The payment still settled. The price is still honest. The receipt is still on the topic.
-> The only thing that broke is the tie between the receipt and this particular answer —
-> which is the whole product. The seller cannot quietly substitute a different result
-> after the fact.
-
-Open the HashScan link on the receipt to show the message is really there.
+Open the HashScan link on the receipt to show the message is really there, and note that
+the verifier just read the public mirror node — it never asked our server anything.
 
 ---
 
@@ -149,6 +168,21 @@ Exit code 0 on success, 1 on failure — it works in CI.
 The scrapers in this category price a page fetch and hand you bytes. This prices the work
 and hands you bytes plus a record that anyone can check. Those are different products;
 the second one is buyable by an agent that has no reason to trust you.
+
+**"But you could just make the data up."**
+Yes — today. We hash what we return, so a fabricated answer hashes faithfully. What the
+receipt stops is changing the story *afterwards*: the seller commits publicly at delivery,
+before knowing whether anyone will challenge it, and a pattern of receipts is auditable
+even though a single one is not. Proving the retrieval itself needs zkTLS; the README has
+the research and the honest status.
+
+**"Who would actually pay for this?"**
+Prediction-market and oracle resolution is the clearest case — Polymarket markets resolve
+against named web sources, disputes are settled by humans voting on what a page said, and
+one such dispute was manipulated for $7M in 2025. The post-mortem asked for exactly this:
+a cryptographically verified source document instead of a screenshot. Adjacent paid
+markets are MAP price enforcement and legal web evidence, where captures sell for
+$99–$499 each.
 
 **"Why not just use the `upto` scheme for metering?"**
 `upto` is specified against Permit2 and ships on EVM networks only. Every Hedera network
