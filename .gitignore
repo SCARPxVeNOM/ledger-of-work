@@ -9,6 +9,8 @@ dist/
 out/
 *.local.json
 result*.json
+result*.page.html
+result*.screenshot.png
 receipt*.json
 
 # playwright

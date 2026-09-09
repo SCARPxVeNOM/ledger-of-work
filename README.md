@@ -123,7 +123,7 @@ independently verified.
 | HTS token as payment asset | done |
 | Agent card on Hedera File Service | done |
 
-107 tests, none of which touch the network.
+225 tests, none of which touch the network.
 
 ## Evidence
 
@@ -155,7 +155,7 @@ site                          fetchable  crawlable  apiless
 quotes.toscrape.com           yes        yes        no       <- has /api/quotes
 books.toscrape.com            yes        yes        yes
 govinfo.gov                   no         yes        no       <- has api.govinfo.gov
-search.lib.virginia.edu       no         yes        yes      <- both
+search.lib.virginia.edu       no         yes        yes*     <- see below
 congress.gov                  no         no         no
 leginfo.legislature.ca.gov    yes        no         yes      <- Disallow: /
 www.gutenberg.org             yes        no         no
@@ -166,6 +166,14 @@ it, nothing answers at `/catalog.json`, `/api/search`, `?format=json` or
 `/opensearch.xml`, and the site serves no robots.txt at all. Results load by a
 **"Load More Results"** button rather than by URL, so reaching the fortieth record
 genuinely requires clicking — there is no page-2 address to fetch.
+
+**\* Correcting that "apiless" mark.** Watching the network while the page loads shows
+the Vue front-end fetching its results from an internal endpoint
+(`pool-solr-ws-uva-library.internal.lib.virginia.edu/api/search`). So the honest claim is
+"no *documented public* API", not "no API" — the survey checked conventional public
+paths and does not look for XHR endpoints, which is a real limitation of that script.
+Anyone who watches the network can call it directly, so the moat is thinner than the
+table suggests. That same finding is what makes the zkTLS work above tractable.
 
 The survey is worth running before you trust that table. Its first version reported
 govinfo as API-less, because Node's fetch fails on `api.govinfo.gov` where curl succeeds
