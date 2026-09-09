@@ -7,7 +7,7 @@
  */
 import { chromium } from "playwright";
 import { price } from "../packages/protocol/src/index.ts";
-import { booksAdapter, quotesAdapter, runJob } from "../packages/worker/src/index.ts";
+import { oracleAdapter, quotesAdapter, runJob } from "../packages/worker/src/index.ts";
 
 const browser = await chromium.launch({ headless: true });
 
@@ -47,18 +47,21 @@ try {
   const large = await run("large: 100 quotes, unfiltered (10 pages)", quotesAdapter, {
     max: 100,
   });
-  const books = await run("books: nonfiction, 4+ stars, under £30", booksAdapter, {
-    category: "nonfiction",
-    maxPrice: 30,
-    minRating: 4,
-    max: 20,
-  });
+  const capture = await run(
+    "capture: the latest Presidential Actions on whitehouse.gov",
+    oracleAdapter,
+    {
+      url: "https://www.whitehouse.gov/presidential-actions/",
+      select: ".wp-block-post-title",
+      max: 3,
+    },
+  );
 
   console.log("\n=== the claim under test ===");
   const ratio = Number(large.charged) / Number(small.charged);
   console.log(`small ${small.work.steps} steps -> ${small.charged} tinybar`);
   console.log(`large ${large.work.steps} steps -> ${large.charged} tinybar`);
-  console.log(`books ${books.work.steps} steps -> ${books.charged} tinybar`);
+  console.log(`capture ${capture.work.steps} steps -> ${capture.charged} tinybar`);
   console.log(
     `\nlarge/small price ratio ${ratio.toFixed(2)}x — ${ratio > 1.5 ? "the meter tracks work" : "TOO FLAT, the meter is not earning its keep"}`,
   );

@@ -33,9 +33,13 @@
   },
   "devDependencies": {
     "@hiero-ledger/sdk": "^2.87.0",
+    "@reclaimprotocol/attestor-core": "^5.1.4",
+    "@reclaimprotocol/tls": "^0.1.4",
+    "@reclaimprotocol/zk-symmetric-crypto": "^5.1.6",
     "@types/node": "^22.10.2",
     "dotenv": "^17.4.2",
     "playwright": "^1.63.0",
+    "snarkjs": "^0.7.6",
     "tsx": "^4.23.13",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"

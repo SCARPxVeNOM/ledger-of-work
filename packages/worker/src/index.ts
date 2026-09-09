@@ -1,4 +1,4 @@
-import { booksAdapter } from "./adapters/books.js";
+import { oracleAdapter } from "./adapters/oracle.js";
 import { govinfoAdapter } from "./adapters/govinfo.js";
 import { virgoAdapter } from "./adapters/virgo.js";
 import { quotesAdapter } from "./adapters/quotes.js";
@@ -22,12 +22,13 @@ export {
   type SiteAdapter,
 } from "./types.js";
 export {
-  CATEGORIES,
-  booksAdapter,
-  parseBooks,
-  type Book,
-  type BooksParams,
-} from "./adapters/books.js";
+  ALLOWED_SOURCES,
+  checkSource,
+  oracleAdapter,
+  tidyValues,
+  type CapturedClaim,
+  type OracleParams,
+} from "./adapters/oracle.js";
 export {
   govinfoAdapter,
   parseDayLabel,
@@ -57,7 +58,7 @@ export {
 // biome-ignore lint/suspicious/noExplicitAny: adapters are heterogeneous by design
 export const CATALOGUE: Record<string, SiteAdapter<any, any>> = {
   [quotesAdapter.spec.name]: quotesAdapter,
-  [booksAdapter.spec.name]: booksAdapter,
+  [oracleAdapter.spec.name]: oracleAdapter,
   [govinfoAdapter.spec.name]: govinfoAdapter,
   [virgoAdapter.spec.name]: virgoAdapter,
 };

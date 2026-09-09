@@ -2,10 +2,10 @@ import { describe, expect, it } from "vitest";
 import { price } from "@low/protocol";
 import { MAX_SOURCES, WorkMeter } from "../src/meter.js";
 import { JobAbortedError } from "../src/types.js";
-import { booksAdapter } from "../src/adapters/books.js";
+import { oracleAdapter } from "../src/adapters/oracle.js";
 import { quotesAdapter } from "../src/adapters/quotes.js";
 import { CATALOGUE } from "../src/index.js";
-import { PRICE_BOOKS } from "../src/pricebooks.js";
+import { CURRENT_PRICE_BOOKS, PRICE_BOOKS, RETIRED_PRICE_BOOKS } from "../src/pricebooks.js";
 
 const LIMITS = { maxSteps: 5, maxPages: 3, maxSessionMs: 10_000 };
 
@@ -118,32 +118,43 @@ describe("plans price the way the meter will", () => {
   });
 
   it("is pure — planning the same params twice gives the same answer", () => {
-    const params = booksAdapter.normalise({ category: "travel", maxPrice: 20, minRating: 4 });
-    expect(booksAdapter.plan(params)).toEqual(booksAdapter.plan(params));
+    const params = oracleAdapter.normalise({
+      url: "https://www.whitehouse.gov/presidential-actions/",
+      select: ".wp-block-post-title",
+    });
+    expect(oracleAdapter.plan(params)).toEqual(oracleAdapter.plan(params));
   });
 
-  it("a stricter rating filter plans more pages, because fewer books match per page", () => {
-    // nonfiction is 110 books over 6 pages, so there is room for the filter to matter.
-    const loose = booksAdapter.plan(booksAdapter.normalise({ category: "nonfiction", max: 20 }));
-    const strict = booksAdapter.plan(
-      booksAdapter.normalise({ category: "nonfiction", max: 20, minRating: 4 }),
-    );
-    expect(strict.pages).toBeGreaterThan(loose.pages);
+  it("charges for an interaction only when one was asked for", () => {
+    const base = { url: "https://www.whitehouse.gov/presidential-actions/", select: "h2" };
+    const plain = oracleAdapter.plan(oracleAdapter.normalise(base));
+    const clicking = oracleAdapter.plan(oracleAdapter.normalise({ ...base, click: ".consent" }));
+    expect(clicking.steps - plain.steps).toBe(1);
+    expect(clicking.estimatedMs).toBeGreaterThan(plain.estimatedMs);
   });
 
-  it("never plans more pages than the category actually has", () => {
-    // travel is 11 books — a single page. Quoting for six would overcharge by 5x.
-    const p = booksAdapter.plan(
-      booksAdapter.normalise({ category: "travel", max: 100, minRating: 5 }),
-    );
-    expect(p.pages).toBe(1);
+  it("does not charge more for asking a capture for more matches", () => {
+    // One page read is one page read. Returning fifty values off it is not fifty times
+    // the work, and pricing it that way would be a per-row fee wearing a meter costume.
+    const base = { url: "https://www.whitehouse.gov/presidential-actions/", select: "h2" };
+    const one = oracleAdapter.plan(oracleAdapter.normalise({ ...base, max: 1 }));
+    const fifty = oracleAdapter.plan(oracleAdapter.normalise({ ...base, max: 50 }));
+    expect(fifty.pages).toBe(one.pages);
+    expect(fifty.steps).toBe(one.steps);
   });
 
-  it("never plans beyond its own page ceiling", () => {
-    const p = booksAdapter.plan(
-      booksAdapter.normalise({ category: "nonfiction", max: 100, minRating: 5 }),
+  it("never plans beyond its own ceilings", () => {
+    const p = oracleAdapter.plan(
+      oracleAdapter.normalise({
+        url: "https://www.whitehouse.gov/presidential-actions/",
+        select: "h2",
+        click: ".x",
+        waitFor: ".y",
+        max: 50,
+      }),
     );
-    expect(p.pages).toBeLessThanOrEqual(booksAdapter.spec.limits.maxPages);
+    expect(p.steps).toBeLessThanOrEqual(oracleAdapter.spec.limits.maxSteps);
+    expect(p.pages).toBeLessThanOrEqual(oracleAdapter.spec.limits.maxPages);
   });
 
   it("does not quote a tagged quotes job for pages a tag cannot have", () => {
@@ -181,13 +192,14 @@ describe("parameter validation", () => {
     expect(() => quotesAdapter.normalise({ tag: "love", max: 2.5 })).toThrow(/max/);
   });
 
-  it("rejects a category outside the fixed catalogue", () => {
-    expect(() => booksAdapter.normalise({ category: "not-a-category" })).toThrow(/category/);
-  });
-
   it("normalises case and whitespace", () => {
     expect(quotesAdapter.normalise({ tag: "  LOVE  " }).tag).toBe("love");
-    expect(booksAdapter.normalise({ category: " Travel " }).category).toBe("travel");
+    expect(
+      oracleAdapter.normalise({
+        url: "https://www.whitehouse.gov/presidential-actions/",
+        select: "  .wp-block-post-title  ",
+      }).select,
+    ).toBe(".wp-block-post-title");
   });
 
   it("applies documented defaults", () => {
@@ -208,7 +220,19 @@ describe("published price books", () => {
     }
   });
 
-  it("publishes a book for every capability and no extras", () => {
-    expect(Object.keys(PRICE_BOOKS).sort()).toEqual(Object.keys(CATALOGUE).sort());
+  it("publishes a book for every capability on sale, and no unexplained extras", () => {
+    // PRICE_BOOKS is the historical record, so it is a superset: everything sellable,
+    // plus everything retired. An entry in neither is a price nobody can account for.
+    expect(Object.keys(PRICE_BOOKS).sort()).toEqual(
+      [...Object.keys(CURRENT_PRICE_BOOKS), ...Object.keys(RETIRED_PRICE_BOOKS)].sort(),
+    );
+    expect(Object.keys(CURRENT_PRICE_BOOKS).sort()).toEqual(Object.keys(CATALOGUE).sort());
+  });
+
+  it("keeps a retired capability verifiable", () => {
+    // Receipts for books.filter_catalogue are on the ledger permanently. Dropping its
+    // price book would leave their meter check unrunnable rather than failing loudly.
+    expect(CATALOGUE["books.filter_catalogue"]).toBeUndefined();
+    expect(PRICE_BOOKS["books.filter_catalogue"]).toBeDefined();
   });
 });

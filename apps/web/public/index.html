@@ -519,11 +519,15 @@ const FIELDS = {
     { k: "month", label: "Month (1-12)", type: "number", def: 1 },
     { k: "max", label: "How many issues", type: "number", def: 8 },
   ],
-  "books.filter_catalogue": [
-    { k: "category", label: "Category", type: "text", def: "nonfiction" },
-    { k: "max", label: "How many", type: "number", def: 10 },
-    { k: "maxPrice", label: "Max price (£)", type: "number", def: 30 },
-    { k: "minRating", label: "Min stars", type: "number", def: 4 },
+  "oracle.capture_claim": [
+    {
+      k: "url",
+      label: "Source document",
+      type: "text",
+      def: "https://www.whitehouse.gov/presidential-actions/",
+    },
+    { k: "select", label: "CSS selector for the value", type: "text", def: ".wp-block-post-title" },
+    { k: "max", label: "How many matches", type: "number", def: 3 },
   ],
 };
 

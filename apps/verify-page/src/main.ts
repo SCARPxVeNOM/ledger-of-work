@@ -178,7 +178,8 @@ async function run(): Promise<void> {
   }
 }
 
-// Prefill the capability list from the same catalogue the seller publishes.
+// Prefill from every price book ever published, including retired capabilities — a
+// receipt on the ledger stays verifiable after the thing that produced it stops selling.
 const capSelect = document.getElementById("capability") as HTMLSelectElement;
 for (const name of Object.keys(PRICE_BOOKS)) {
   const o = document.createElement("option");

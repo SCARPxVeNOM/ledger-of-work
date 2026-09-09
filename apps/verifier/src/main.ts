@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { formatChecks, verifyFromMirror } from "@low/receipts";
-import { CATALOGUE } from "@low/worker";
+import { PRICE_BOOKS } from "@low/worker/pricebooks";
 
 /**
  * Independent receipt verification.
@@ -80,7 +80,12 @@ const shotPath = `${artifactBase}.screenshot.png`;
 const pageHtml = existsSync(pagePath) ? readFileSync(pagePath, "utf8") : undefined;
 const screenshot = existsSync(shotPath) ? readFileSync(shotPath) : undefined;
 
-const priceBook = capability ? CATALOGUE[capability]?.spec.priceBook : undefined;
+// Read the published price books, not the live catalogue. A verifier is asked about a
+// receipt that already exists, and that receipt may name a capability we have since
+// stopped selling — in which case the catalogue no longer holds its price and the meter
+// check would be skipped rather than run. PRICE_BOOKS keeps retired prices for exactly
+// this reason.
+const priceBook = capability ? PRICE_BOOKS[capability] : undefined;
 if (capability && !priceBook) {
   console.error(`unknown capability "${capability}" — cannot check the meter`);
 }
