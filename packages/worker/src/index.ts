@@ -8,6 +8,7 @@ export { MAX_SOURCES, WorkMeter, type MeterOptions, type StepEvent } from "./met
 export {
   DEFAULT_USER_AGENT,
   runJob,
+  type Evidence,
   type RunResult,
   type RuntimeOptions,
 } from "./runtime.js";

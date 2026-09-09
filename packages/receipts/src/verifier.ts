@@ -1,5 +1,6 @@
 import {
   hashCanonical,
+  sha256,
   toRestTxId,
   verifyReceipt,
   type CheckResult,
@@ -21,6 +22,12 @@ export interface VerifyRequest {
   priceBook?: PriceBook;
   /** Needed to check the meter when the receipt settled in an HTS token. */
   asset?: AssetSpec;
+  /**
+   * The page HTML and screenshot the buyer was given. Omit them and the evidence checks
+   * report unproven rather than passing.
+   */
+  pageHtml?: string;
+  screenshot?: Buffer;
 }
 
 export interface FullVerifyOutput extends VerifyOutput {
@@ -77,6 +84,12 @@ export async function verifyFromMirror(
     // Hashing happens here rather than inside verifyReceipt, so that function stays
     // synchronous and portable enough to bundle for the browser verifier.
     resultHash: hashCanonical(request.result),
+    // Hashed exactly as the seller hashed them: raw bytes, no canonicalisation, because
+    // these are opaque artifacts rather than structured data.
+    ...(request.pageHtml !== undefined
+      ? { pageHash: sha256(Buffer.from(request.pageHtml, "utf8")) }
+      : {}),
+    ...(request.screenshot ? { screenshotHash: sha256(request.screenshot) } : {}),
     message,
     expectedSubmitter: request.expectedSubmitter,
     priceBook: request.priceBook,

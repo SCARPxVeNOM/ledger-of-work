@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { formatChecks, verifyFromMirror } from "@low/receipts";
 import { CATALOGUE } from "@low/worker";
 
@@ -67,6 +67,19 @@ try {
   process.exit(2);
 }
 
+/**
+ * Look for the artifacts the buyer CLI saves beside the result.
+ *
+ * Found automatically rather than asked for, because a check nobody runs is not a check
+ * — and the whole point of handing the buyer these files is that verifying them should
+ * cost nothing.
+ */
+const artifactBase = resultPath.replace(/\.json$/, "");
+const pagePath = `${artifactBase}.page.html`;
+const shotPath = `${artifactBase}.screenshot.png`;
+const pageHtml = existsSync(pagePath) ? readFileSync(pagePath, "utf8") : undefined;
+const screenshot = existsSync(shotPath) ? readFileSync(shotPath) : undefined;
+
 const priceBook = capability ? CATALOGUE[capability]?.spec.priceBook : undefined;
 if (capability && !priceBook) {
   console.error(`unknown capability "${capability}" — cannot check the meter`);
@@ -85,6 +98,8 @@ const out = await verifyFromMirror(
     expectedSubmitter: submitter,
     ...(priceBook ? { priceBook } : {}),
     ...(asset ? { asset } : {}),
+    ...(pageHtml !== undefined ? { pageHtml } : {}),
+    ...(screenshot ? { screenshot } : {}),
   },
   mirrorUrl ? { baseUrl: mirrorUrl } : {},
 );

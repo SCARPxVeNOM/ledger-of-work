@@ -5,6 +5,7 @@ import { price } from "./price.js";
 import {
   HCS_CHUNK_BYTES,
   RECEIPT_VERSION,
+  SUPPORTED_RECEIPT_VERSIONS,
   type CheckResult,
   type PriceBook,
   type Receipt,
@@ -42,6 +43,15 @@ export interface VerifyInput {
    * of maintaining two verifiers that could drift apart.
    */
   resultHash: string;
+  /**
+   * `sha256:<hex>` over the page HTML and screenshot the buyer received.
+   *
+   * Omitted when the buyer did not keep the artifacts. The evidence checks then report
+   * as unproven rather than passing, because a check that silently succeeds on missing
+   * input is worse than no check.
+   */
+  pageHash?: string | undefined;
+  screenshotHash?: string | undefined;
   /** The HCS message at the receipt locator. */
   message: MirrorTopicMessage;
   /** The account the service is expected to submit receipts from. */
@@ -118,8 +128,8 @@ export function verifyReceipt(input: VerifyInput): VerifyOutput {
     !add(
       "parse",
       "Receipt parses at a known schema version",
-      receipt.v === RECEIPT_VERSION,
-      `v=${String(receipt.v)}, this verifier understands v=${RECEIPT_VERSION}`,
+      (SUPPORTED_RECEIPT_VERSIONS as readonly number[]).includes(receipt.v),
+      `v=${String(receipt.v)}, this verifier reads v=${SUPPORTED_RECEIPT_VERSIONS.join(", ")} (current ${RECEIPT_VERSION})`,
     )
   ) {
     return { ok: false, checks, receipt };
@@ -135,6 +145,42 @@ export function verifyReceipt(input: VerifyInput): VerifyOutput {
       ? actualHash
       : `computed ${actualHash}, receipt claims ${receipt.resultHash}`,
   );
+
+  // 4b. What the page looked like.
+  //
+  // Reported as three states, never two: matched, mismatched, or not checkable. A
+  // receipt that carries no evidence is not thereby fine — it is unproven, and saying so
+  // is the difference between a verifier and a rubber stamp.
+  if (receipt.evidence) {
+    const pair: Array<[string, string, string | undefined, string]> = [
+      ["page", "Page HTML matches the recorded hash", input.pageHash, receipt.evidence.pageHash],
+      [
+        "screenshot",
+        "Screenshot matches the recorded hash",
+        input.screenshotHash,
+        receipt.evidence.screenshotHash,
+      ],
+    ];
+    for (const [id, label, supplied, recorded] of pair) {
+      if (supplied === undefined) {
+        add(id, label, false, `not checked — supply the artifact to compare against ${recorded}`);
+      } else {
+        add(
+          id,
+          label,
+          supplied === recorded,
+          supplied === recorded ? recorded : `computed ${supplied}, receipt claims ${recorded}`,
+        );
+      }
+    }
+  } else if (receipt.v >= 2) {
+    add(
+      "page",
+      "Page HTML matches the recorded hash",
+      false,
+      "this v2 receipt records no evidence — the page could not be captured",
+    );
+  }
 
   // 5. The timing claim: consensus happened at or after the job finished, and close to it.
   const finishedAt = Date.parse(receipt.finishedAt);
@@ -257,6 +303,38 @@ export function verifyReceipt(input: VerifyInput): VerifyOutput {
  */
 export function fitsOneChunk(receipt: Receipt): boolean {
   return new TextEncoder().encode(canonical(receipt)).length <= HCS_CHUNK_BYTES;
+}
+
+/**
+ * Trim a receipt until it fits one HCS chunk, dropping sources from the end.
+ *
+ * Adding evidence hashes left only ~39 bytes of headroom on a typical receipt, which is
+ * not a margin — one longer URL and receipts start chunking, which silently breaks every
+ * REST reader. `sources` is the only unbounded field, so it is the one that gives.
+ *
+ * Returns how many were dropped so the receipt can say so rather than quietly appearing
+ * complete. Throws if it cannot fit even with no sources at all, because publishing a
+ * chunked receipt is worse than failing loudly.
+ */
+export function fitReceipt(receipt: Receipt): { receipt: Receipt; droppedSources: number } {
+  if (fitsOneChunk(receipt)) return { receipt, droppedSources: 0 };
+
+  const sources = [...receipt.sources];
+  let dropped = 0;
+
+  while (sources.length > 0) {
+    sources.pop();
+    dropped++;
+    const trimmed = { ...receipt, sources };
+    if (fitsOneChunk(trimmed)) return { receipt: trimmed, droppedSources: dropped };
+  }
+
+  const bare = { ...receipt, sources: [] };
+  if (fitsOneChunk(bare)) return { receipt: bare, droppedSources: dropped };
+
+  throw new Error(
+    `receipt for job ${receipt.jobId} is ${new TextEncoder().encode(canonical(bare)).length} bytes with no sources and cannot fit one ${HCS_CHUNK_BYTES}-byte chunk`,
+  );
 }
 
 /**

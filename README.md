@@ -33,7 +33,14 @@ must commit publicly, at the moment of delivery, before knowing whether anyone w
 challenge it — and cannot revise that story afterwards. That is genuinely useful and
 narrower than "verified data".
 
-Closing that gap properly means proving the retrieval itself, not just the delivery. See
+**What narrows it.** Every receipt also commits to a hash of the **fully rendered page**
+and a **full-page screenshot**, and the buyer receives both files. Faking a job now means
+producing a convincing page and a matching screenshot that a human can open and look at,
+rather than editing one field in a JSON file. Each artifact is checked independently —
+flip a single bit in the screenshot and that check goes red while the result and page
+stay green.
+
+Closing the gap properly means proving the retrieval itself. See
 [Proving retrieval](#proving-retrieval-not-just-delivery) for where that stands.
 
 ## Why web jobs
@@ -58,7 +65,8 @@ filter, paginate, extract — and returns structured output.
 time. A two-step job costs less than a nine-step one, and the unit prices are published
 in advance so a buyer can compute the price themselves.
 
-**The receipt** records, for every job: a hash of the result, the source URLs,
+**The receipt** records, for every job: hashes of the result, the rendered page and a
+screenshot, the source URLs,
 timestamps, which capability ran, the work performed, the price charged, the payment
 reference, and the paying agent. Hashes rather than payloads, so integrity is provable
 without republishing content that isn't ours to redistribute.

@@ -311,6 +311,11 @@ export async function startSeller(config: SellerConfig) {
         );
         return send(res, 200, {
           result: outcome.result,
+          // The buyer needs these to check the evidence hashes themselves; without them
+          // the receipt's evidence commitment is unfalsifiable, which is the opposite of
+          // the point.
+          ...(outcome.artifacts ? { artifacts: outcome.artifacts } : {}),
+          evidence: outcome.receipt.evidence,
           receipt: receiptBlock,
           price: {
             // The denomination actually settled, not the one the meter counts in. These

@@ -32,7 +32,9 @@ export { price, priceTinybars, type PriceBreakdown, type PricedWork } from "./pr
 export {
   HCS_CHUNK_BYTES,
   RECEIPT_VERSION,
+  SUPPORTED_RECEIPT_VERSIONS,
   type CheckResult,
+  type EvidenceRef,
   type JobStatus,
   type PaymentRef,
   type PriceBook,
@@ -41,6 +43,7 @@ export {
   type StepLog,
 } from "./types.js";
 export {
+  fitReceipt,
   fitsOneChunk,
   verifyReceipt,
   type MirrorTopicMessage,

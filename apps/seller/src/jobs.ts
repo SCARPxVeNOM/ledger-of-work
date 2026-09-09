@@ -1,4 +1,4 @@
-import { hashCanonical, type Receipt } from "@low/protocol";
+import { hashCanonical, sha256, type EvidenceRef, type Receipt } from "@low/protocol";
 import { JobAbortedError, runJob, type SiteAdapter, type StepEvent } from "@low/worker";
 import type { Browser } from "playwright";
 import type { ReceiptLocator, ReceiptPublisher } from "@low/receipts";
@@ -26,6 +26,8 @@ export interface ExecuteDeps {
 export interface ExecuteOutcome {
   ok: boolean;
   result?: unknown;
+  /** Artifacts the buyer needs to check the evidence hashes themselves. */
+  artifacts?: { html: string; screenshotBase64: string };
   receipt: Receipt;
   locator: ReceiptLocator;
   charged: string;
@@ -65,6 +67,8 @@ export async function executeJob(
   let items: unknown;
   let work = { steps: 0, pages: 0, sessionMs: 0 };
   let sources: string[] = [];
+  let evidence: EvidenceRef | undefined;
+  let artifacts: { html: string; screenshotBase64: string } | undefined;
   let startedAt = new Date().toISOString();
   let finishedAt = startedAt;
   let failure: string | undefined;
@@ -79,6 +83,19 @@ export async function executeJob(
     sources = run.work.sources;
     startedAt = run.startedAt;
     finishedAt = run.finishedAt;
+    if (run.evidence) {
+      // Hash the artifacts exactly as delivered, so the buyer's re-hash matches ours.
+      evidence = {
+        pageHash: sha256(Buffer.from(run.evidence.html, "utf8")),
+        screenshotHash: sha256(run.evidence.screenshot),
+        finalUrl: run.evidence.finalUrl,
+        capturedAt: run.evidence.capturedAt,
+      };
+      artifacts = {
+        html: run.evidence.html,
+        screenshotBase64: run.evidence.screenshot.toString("base64"),
+      };
+    }
   } catch (err) {
     // A job that failed still did work, and that work is part of the record. But we do
     // not settle for it — see below.
@@ -100,7 +117,7 @@ export async function executeJob(
   const resultHash = failure ? "sha256:" + "0".repeat(64) : hashCanonical(result);
 
   const receipt: Receipt = {
-    v: 1,
+    v: 2,
     kind: "delivery",
     jobId: quote.jobId,
     capability: quote.capability,
@@ -115,6 +132,7 @@ export async function executeJob(
     },
     work,
     price: { unit: quote.asset.id === "0.0.0" ? "tinybar" : quote.asset.symbol, quoted: quote.assetAmount, charged },
+    ...(evidence ? { evidence } : {}),
     payment: {
       network: deps.network,
       scheme: "exact",
@@ -154,7 +172,7 @@ export async function executeJob(
   if (payer) receipt.payment.payer = payer;
 
   const locator = await publishWithRetry(deps.publisher, receipt);
-  return { ok: true, result, receipt, locator, charged: quote.assetAmount };
+  return { ok: true, result, ...(artifacts ? { artifacts } : {}), receipt, locator, charged: quote.assetAmount };
 }
 
 /**

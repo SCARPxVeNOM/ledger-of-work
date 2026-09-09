@@ -5,7 +5,7 @@ import {
   TopicCreateTransaction,
   TopicMessageSubmitTransaction,
 } from "@hiero-ledger/sdk";
-import { canonical, fitsOneChunk, type Receipt } from "@low/protocol";
+import { canonical, fitReceipt, type Receipt } from "@low/protocol";
 
 export interface ReceiptLocator {
   topicId: string;
@@ -59,10 +59,15 @@ export class ReceiptPublisher {
    * path but hashed by another would not match.
    */
   async publish(receipt: Receipt): Promise<ReceiptLocator> {
-    const body = canonical(receipt);
-    const bytes = Buffer.from(body, "utf8");
-
-    if (!fitsOneChunk(receipt)) throw new ReceiptTooLargeError(bytes.length);
+    // Trim rather than reject: a receipt that is a few bytes over should lose a source
+    // URL, not fail a job the buyer has already paid for.
+    const { receipt: fitted, droppedSources } = fitReceipt(receipt);
+    if (droppedSources > 0) {
+      console.warn(
+        `receipt ${receipt.jobId}: dropped ${droppedSources} source URL(s) to fit one HCS chunk`,
+      );
+    }
+    const bytes = Buffer.from(canonical(fitted), "utf8");
 
     const submitted = await (
       await new TopicMessageSubmitTransaction()

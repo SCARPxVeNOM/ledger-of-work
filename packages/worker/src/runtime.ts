@@ -3,6 +3,24 @@ import type { StepLog } from "@low/protocol";
 import { WorkMeter, type StepEvent } from "./meter.js";
 import { JobAbortedError, type JobContext, type SiteAdapter } from "./types.js";
 
+/**
+ * What the job saw, captured at the moment it finished.
+ *
+ * The receipt commits to hashes of these and the buyer receives the artifacts
+ * themselves. It does not make fabrication impossible — a determined seller could render
+ * a convincing page — but it raises the cost from "edit one field in a JSON file" to
+ * "produce a full page and a matching screenshot that a human will look at".
+ */
+export interface Evidence {
+  /** Fully rendered HTML of the final page, after scripts ran. */
+  html: string;
+  /** Full-page PNG. */
+  screenshot: Buffer;
+  /** Where the browser actually ended up, which may differ from where it was sent. */
+  finalUrl: string;
+  capturedAt: string;
+}
+
 export interface RunResult<Item> {
   items: Item[];
   work: StepLog;
@@ -10,6 +28,8 @@ export interface RunResult<Item> {
   truncatedSources: number;
   startedAt: string;
   finishedAt: string;
+  /** Absent when the page could not be captured; never a reason to fail a paid job. */
+  evidence?: Evidence;
 }
 
 export interface RuntimeOptions {
@@ -20,6 +40,8 @@ export interface RuntimeOptions {
   userAgent?: string;
   /** Observe the meter as it runs. Used to stream a live count to a watching UI. */
   onStep?: (event: StepEvent) => void;
+  /** Capture page HTML and a screenshot when the job finishes. Default true. */
+  captureEvidence?: boolean;
 }
 
 export const DEFAULT_USER_AGENT =
@@ -35,6 +57,31 @@ export const DEFAULT_USER_AGENT =
  * Timing starts when the context is ready, not when the browser launches: a buyer should
  * not pay for our cold start.
  */
+/**
+ * Capture what the page looked like when the job ended.
+ *
+ * Deliberately never throws. The buyer has already paid by the time this runs, and
+ * failing a completed job because a screenshot did not render would be the wrong trade —
+ * the receipt simply records no evidence hashes, which the verifier reports rather than
+ * glosses over.
+ */
+async function captureEvidence(page: Page): Promise<Evidence | undefined> {
+  try {
+    const [html, screenshot] = await Promise.all([
+      page.content(),
+      page.screenshot({ fullPage: true, type: "png" }),
+    ]);
+    return {
+      html,
+      screenshot,
+      finalUrl: page.url(),
+      capturedAt: new Date().toISOString(),
+    };
+  } catch {
+    return undefined;
+  }
+}
+
 export async function runJob<Params, Item>(
   adapter: SiteAdapter<Params, Item>,
   rawParams: unknown,
@@ -67,6 +114,8 @@ export async function runJob<Params, Item>(
 
     const items = await adapter.run(ctx, params);
     const work = meter.snapshot();
+    const evidence =
+      options.captureEvidence === false ? undefined : await captureEvidence(page);
 
     return {
       items,
@@ -74,6 +123,7 @@ export async function runJob<Params, Item>(
       truncatedSources: meter.truncatedSources,
       startedAt,
       finishedAt: new Date().toISOString(),
+      ...(evidence ? { evidence } : {}),
     };
   } catch (err) {
     // A ceiling breach is not an unexpected failure — it is the designed response to a

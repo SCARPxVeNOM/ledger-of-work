@@ -99,6 +99,8 @@ const t0 = Date.now();
 const paid = await fetch(quote.run, { method: "POST", headers: { "payment-signature": header } });
 const body = (await paid.json()) as {
   result?: unknown;
+  artifacts?: { html: string; screenshotBase64: string };
+  evidence?: { pageHash: string; screenshotHash: string; finalUrl: string };
   receipt?: { topicId: string; sequenceNumber: number; explorer: string };
   price?: { quoted: string; charged: string; unit?: string };
   plan?: { steps: number; pages: number };
@@ -118,6 +120,19 @@ if (!paid.ok) {
 
 const items = (body.result as { items?: unknown[] })?.items ?? [];
 writeFileSync(out, JSON.stringify(body.result, null, 2));
+
+// Keep the artifacts next to the result. They are what make the receipt's evidence
+// commitment checkable rather than decorative — and the screenshot is the one a human
+// can actually look at to see whether it shows the claim.
+const base = out.replace(/\.json$/, "");
+let artifactNote = "";
+if (body.artifacts) {
+  writeFileSync(`${base}.page.html`, body.artifacts.html);
+  writeFileSync(`${base}.screenshot.png`, Buffer.from(body.artifacts.screenshotBase64, "base64"));
+  artifactNote = `
+  page    -> ${base}.page.html
+  shot    -> ${base}.screenshot.png`;
+}
 
 console.log(`\ndone in ${Date.now() - t0}ms`);
 console.log(`  items     ${items.length}`);

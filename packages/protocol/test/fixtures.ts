@@ -32,9 +32,16 @@ const PLAN = { steps: 6, pages: 2, estimatedMs: 6000 };
 /** plan: base 50000 + 6*10000 + 2*25000 + 6s*2000 => 50000+60000+50000+12000 */
 export const EXPECTED_CHARGE = "172000";
 
+export const EVIDENCE = {
+  pageHash: `sha256:${"ab".repeat(32)}`,
+  screenshotHash: `sha256:${"cd".repeat(32)}`,
+  finalUrl: "https://quotes.toscrape.com/tag/love/page/2/",
+  capturedAt: "2026-09-08T04:12:09.900Z",
+};
+
 export function makeReceipt(overrides: Partial<Receipt> = {}): Receipt {
   return {
-    v: 1,
+    v: 2,
     kind: "delivery",
     jobId: "01JBQZK4T9XN2M7V0S3H8WQPCD",
     capability: "quotes.search_and_extract",
@@ -45,6 +52,7 @@ export function makeReceipt(overrides: Partial<Receipt> = {}): Receipt {
     plan: PLAN,
     work: WORK,
     price: { unit: "tinybar", quoted: EXPECTED_CHARGE, charged: EXPECTED_CHARGE },
+    evidence: EVIDENCE,
     payment: {
       network: "hedera:testnet",
       scheme: "exact",

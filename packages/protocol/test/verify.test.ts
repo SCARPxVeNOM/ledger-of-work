@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { fitsOneChunk, verifyReceipt } from "../src/verify.js";
+import { fitReceipt, fitsOneChunk, verifyReceipt } from "../src/verify.js";
 import { canonicalByteLength } from "../src/canonical.js";
 import { hashCanonical } from "../src/hash.js";
-import { HCS_CHUNK_BYTES } from "../src/types.js";
+import { HCS_CHUNK_BYTES, type Receipt } from "../src/types.js";
 import {
   BUYER,
+  EVIDENCE,
   EXPECTED_CHARGE,
   PRICE_BOOK,
   RESULT,
@@ -23,6 +24,8 @@ function verifyFixture(over: {
   const receipt = makeReceipt(over.receipt);
   return verifyReceipt({
     resultHash: hashCanonical("result" in over ? over.result : RESULT),
+    pageHash: EVIDENCE.pageHash,
+    screenshotHash: EVIDENCE.screenshotHash,
     message: makeMessage(receipt, over.message),
     transaction: makeTransaction(receipt, over.transaction),
     expectedSubmitter: SELLER,
@@ -47,6 +50,8 @@ describe("verifyReceipt — the happy path", () => {
       "submitter",
       "parse",
       "result",
+      "page",
+      "screenshot",
       "timing",
       "payment",
       "payer",
@@ -218,5 +223,100 @@ describe("receipt size", () => {
   it("detects a receipt that has outgrown one chunk", () => {
     const bloated = makeReceipt({ sources: Array.from({ length: 40 }, (_, i) => `https://example.com/a-fairly-long-source-url/${i}`) });
     expect(fitsOneChunk(bloated)).toBe(false);
+  });
+});
+
+describe("evidence, and receipts written before it existed", () => {
+  it("goes red when the page HTML does not match", () => {
+    const out = verifyReceipt({
+      resultHash: hashCanonical(RESULT),
+      pageHash: `sha256:${"99".repeat(32)}`,
+      screenshotHash: EVIDENCE.screenshotHash,
+      message: makeMessage(makeReceipt()),
+      transaction: makeTransaction(makeReceipt()),
+      expectedSubmitter: SELLER,
+      priceBook: PRICE_BOOK,
+    });
+    expect(out.ok).toBe(false);
+    expect(out.checks.filter((c) => !c.ok).map((c) => c.id)).toEqual(["page"]);
+  });
+
+  it("goes red when the screenshot does not match, even if the HTML does", () => {
+    // The screenshot is the artifact a human can actually look at, so it has to be
+    // checked independently rather than folded into one evidence verdict.
+    const out = verifyReceipt({
+      resultHash: hashCanonical(RESULT),
+      pageHash: EVIDENCE.pageHash,
+      screenshotHash: `sha256:${"11".repeat(32)}`,
+      message: makeMessage(makeReceipt()),
+      transaction: makeTransaction(makeReceipt()),
+      expectedSubmitter: SELLER,
+      priceBook: PRICE_BOOK,
+    });
+    expect(out.checks.filter((c) => !c.ok).map((c) => c.id)).toEqual(["screenshot"]);
+  });
+
+  it("reports unproven — not passing — when the buyer kept no artifacts", () => {
+    // A check that silently succeeds on missing input is worse than no check.
+    const out = verifyReceipt({
+      resultHash: hashCanonical(RESULT),
+      message: makeMessage(makeReceipt()),
+      transaction: makeTransaction(makeReceipt()),
+      expectedSubmitter: SELLER,
+      priceBook: PRICE_BOOK,
+    });
+    const page = out.checks.find((c) => c.id === "page");
+    expect(page?.ok).toBe(false);
+    expect(page?.detail).toMatch(/not checked/);
+  });
+
+  it("still verifies a v1 receipt, which predates evidence entirely", () => {
+    // Receipts 1-15 on the live topic are v1. A schema change that orphaned them would
+    // put a hole in the one log the product's claim rests on.
+    const { evidence: _dropped, ...rest } = makeReceipt();
+    const v1 = { ...rest, v: 1 } as Receipt;
+    const out = verifyReceipt({
+      resultHash: hashCanonical(RESULT),
+      message: makeMessage(v1),
+      transaction: makeTransaction(v1),
+      expectedSubmitter: SELLER,
+      priceBook: PRICE_BOOK,
+    });
+    expect(out.ok).toBe(true);
+    // And it does not invent evidence checks for a receipt that never carried any.
+    expect(out.checks.some((c) => c.id === "page")).toBe(false);
+  });
+});
+
+describe("fitting a receipt into one chunk", () => {
+  it("leaves a receipt alone when it already fits", () => {
+    const r = makeReceipt();
+    const { receipt, droppedSources } = fitReceipt(r);
+    expect(droppedSources).toBe(0);
+    expect(receipt.sources).toEqual(r.sources);
+  });
+
+  it("drops sources until it fits, and says how many", () => {
+    const bloated = makeReceipt({
+      sources: Array.from({ length: 12 }, (_, i) => `https://example.com/a-long-source-url/${i}`),
+    });
+    expect(fitsOneChunk(bloated)).toBe(false);
+    const { receipt, droppedSources } = fitReceipt(bloated);
+    expect(fitsOneChunk(receipt)).toBe(true);
+    expect(droppedSources).toBeGreaterThan(0);
+    expect(receipt.sources.length).toBe(12 - droppedSources);
+  });
+
+  it("drops the newest sources first, keeping the earliest", () => {
+    const bloated = makeReceipt({
+      sources: Array.from({ length: 12 }, (_, i) => `https://example.com/a-long-source-url/${i}`),
+    });
+    const { receipt } = fitReceipt(bloated);
+    expect(receipt.sources[0]).toBe("https://example.com/a-long-source-url/0");
+  });
+
+  it("throws rather than publishing a chunked receipt it cannot shrink", () => {
+    const impossible = makeReceipt({ capability: "x".repeat(1200), sources: [] });
+    expect(() => fitReceipt(impossible)).toThrow(/cannot fit one/);
   });
 });
