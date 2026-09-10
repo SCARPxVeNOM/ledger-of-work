@@ -36,6 +36,7 @@ h2::after { content: ""; flex: 1; border-bottom: 1px solid var(--rule); }
 label { display: block; font-size: 11px; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-soft); margin: 16px 0 5px; }
 input, select { width: 100%; font: inherit; font-size: 13px; color: var(--ink); background: transparent; border: 0; border-bottom: 1px solid var(--ink); padding: 6px 2px; border-radius: 0; }
 input[type=file] { border-bottom: 0; padding-left: 0; font-size: 12px; }
+.hint { margin: 6px 0 0; font-size: 12px; color: var(--ink-soft); max-width: 64ch; }
 input:focus, select:focus { outline: 0; border-bottom-width: 2px; padding-bottom: 5px; }
 .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 22px; }
 @media (max-width: 640px) { .grid { grid-template-columns: 1fr; } }
@@ -99,6 +100,14 @@ footer { margin-top: 44px; padding-top: 18px; border-top: 1px solid var(--rule);
 
 <label for="result">The result file you were given</label>
 <input id="result" type="file" accept="application/json,.json" />
+
+<label for="artifacts">The files handed over with it — page, screenshot, proof (optional)</label>
+<input id="artifacts" type="file" multiple accept=".html,.png,.json,text/html,image/png,application/json" />
+<p class="hint">
+  Without these, the checks that need them report <em>not checked</em> rather than passing.
+  Signature verification is the one thing this page cannot do — it needs the attestor
+  library, which would be megabytes. Use <code>pnpm verify</code> for that one.
+</p>
 
 <details>
   <summary>Settled in a token, or a different network?</summary>

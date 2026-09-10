@@ -1,3 +1,4 @@
+import { checkCoverage, type RetrievalProof } from "@low/proof/portable";
 import {
   canonical,
   isHbar,
@@ -42,6 +43,55 @@ async function hashCanonicalBrowser(value: unknown): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", bytes);
   const hex = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
   return `sha256:${hex}`;
+}
+
+/** SHA-256 over raw bytes — page HTML and screenshots are opaque, not structured data. */
+async function sha256Browser(bytes: ArrayBuffer): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  const hex = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+  return `sha256:${hex}`;
+}
+
+/**
+ * Sort the dropped files by what they actually are, not by what they are called.
+ *
+ * A buyer renames files. Sniffing the content means the page works when they do, and —
+ * more importantly — a JSON file is only treated as a proof if it has the shape of one,
+ * so dropping the result file twice cannot silently stand in for a proof that was never
+ * supplied.
+ */
+async function sortArtifacts(files: File[]): Promise<{
+  pageHash?: string;
+  screenshotHash?: string;
+  proof?: RetrievalProof;
+}> {
+  const out: { pageHash?: string; screenshotHash?: string; proof?: RetrievalProof } = {};
+  for (const file of files) {
+    const buffer = await file.arrayBuffer();
+    const head = new TextDecoder().decode(buffer.slice(0, 512)).trimStart();
+
+    // PNG's magic number. Screenshots are the artifact a human actually looks at.
+    const bytes = new Uint8Array(buffer.slice(0, 8));
+    if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) {
+      out.screenshotHash = await sha256Browser(buffer);
+      continue;
+    }
+
+    if (head.startsWith("{")) {
+      try {
+        const parsed = JSON.parse(new TextDecoder().decode(buffer)) as RetrievalProof;
+        if (parsed?.claim?.parameters && parsed?.signatures?.attestorAddress) out.proof = parsed;
+      } catch {
+        /* not a proof; ignore rather than fail the whole verification */
+      }
+      continue;
+    }
+
+    // Anything else textual is treated as the page. Hashed as raw bytes, exactly as the
+    // seller hashed it — canonicalising it here would guarantee a mismatch.
+    out.pageHash = await sha256Browser(buffer);
+  }
+  return out;
 }
 
 /** REST wants `0.0.x-secs-nanos`; the SDK prints `0.0.x@secs.nanos` and REST 400s on it. */
@@ -132,8 +182,10 @@ async function run(): Promise<void> {
     // left for verifyReceipt to report properly rather than thrown.
     let transaction: MirrorTransaction | undefined;
     let txUrl: string | undefined;
+    let receiptFinalUrl: string | undefined;
     try {
       const peeked = JSON.parse(atob(message.message)) as Receipt;
+      receiptFinalUrl = peeked.evidence?.finalUrl;
       if (peeked.payment?.txId) {
         txUrl = `${mirror}/transactions/${toRestTxId(peeked.payment.txId)}`;
         const body = await getJson<{ transactions: (MirrorTransaction & { nonce?: number })[] }>(txUrl);
@@ -157,10 +209,33 @@ async function run(): Promise<void> {
       };
     }
 
+    const artifacts = await sortArtifacts([
+      ...((document.getElementById("artifacts") as HTMLInputElement).files ?? []),
+    ]);
+
+    // The retrieval questions this page can answer without the attestor library: is this
+    // the proof the receipt committed to, and does it cover the answer? The signature
+    // itself is left to the CLI, and reported as unchecked rather than assumed.
+    const proofHash = artifacts.proof
+      ? await hashCanonicalBrowser(artifacts.proof)
+      : undefined;
+    const coverage =
+      artifacts.proof && receiptFinalUrl
+        ? checkCoverage({
+            proof: artifacts.proof,
+            expectedUrl: receiptFinalUrl,
+            answer: JSON.stringify(result),
+          })
+        : undefined;
+
     const out = verifyReceipt({
       resultHash: await hashCanonicalBrowser(result),
       message,
       expectedSubmitter: submitter,
+      ...(artifacts.pageHash ? { pageHash: artifacts.pageHash } : {}),
+      ...(artifacts.screenshotHash ? { screenshotHash: artifacts.screenshotHash } : {}),
+      ...(proofHash ? { retrievalProofHash: proofHash } : {}),
+      ...(coverage ? { retrievalCoverage: coverage } : {}),
       ...(priceBook ? { priceBook } : {}),
       ...(asset ? { asset } : {}),
       ...(transaction ? { transaction } : {}),

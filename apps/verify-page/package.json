@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@low/protocol": "workspace:*",
+    "@low/proof": "workspace:*",
     "@low/worker": "workspace:*"
   },
   "devDependencies": {
