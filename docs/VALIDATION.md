@@ -30,6 +30,11 @@ capabilities
      1  books.filter_catalogue
 ```
 
+`books.filter_catalogue` has since been retired — a demo bookshop is not a source anyone
+needs a receipt about. Its receipt stays on the topic and stays verifiable, because the
+price book it was sold under is kept after the capability is withdrawn. Usage figures
+report what happened, not what is currently on sale.
+
 **Paying accounts: 1.** That is the developer's own buyer account. There is no external
 usage yet, and the instrument says so rather than flattering the number — which is the
 main reason to report traction this way. Anyone can recompute these figures from the

@@ -1,6 +1,6 @@
 # Demo script
 
-Four minutes, three claims. Everything below runs against Hedera testnet and settles real
+Five minutes, four claims. Everything below runs against Hedera testnet and settles real
 payments — nothing is mocked.
 
 ## Before you start
@@ -48,10 +48,22 @@ Have a completed job on screen before you begin. Click **Tamper & re-verify**.
 
 Then say the limitation out loud, before anyone finds it:
 
-> What this proves is that the seller cannot change their story after the fact. It does
-> **not** prove the data is true — we hash what we return, so a dishonest seller could
-> fabricate an answer and hash the fabrication. Closing that means proving the retrieval
-> itself with zkTLS, and the README has the research for it.
+> Every hash on that receipt is over something *we* produced. A dishonest seller could
+> fabricate an answer, screenshot the fabrication, and pass all of it. So the receipt on
+> its own proves we cannot change our story — not that we ever went to the source.
+
+Then close it, because this is the one you now can:
+
+> Which is why the last check is different. On a capture job an independent attestor
+> opens the TLS session alongside us and signs that the response really contained the
+> answer. We can't forge that — we don't have its key. Fifteen checks, and the fifteenth
+> isn't ours.
+
+If asked what it still doesn't do, answer straight: it is a **witness, not mathematics**.
+Compromise the attestor and the signature is worth nothing. It proves the response that
+carried the answer, not the clicking that reached it. And capabilities that need a login
+don't get one, because proving those took 28 seconds against 2 — the numbers are in the
+README.
 
 You will lose nothing by saying this and a great deal by being caught not saying it. A
 judge who finds a hidden limitation discounts everything else you claimed.
@@ -88,7 +100,7 @@ Run it if there is time; the point lands on the quote alone.
 
 Back on the first job's receipt. **Verify receipt.**
 
-Ten checks stamp in green, then a VERIFIED stamp.
+The checks stamp in green, then a VERIFIED stamp.
 
 > Read out the three that matter: the result matches the hash recorded on chain, the
 > settlement moved exactly the amount claimed, and the quote follows the published price
@@ -101,6 +113,39 @@ Ten checks stamp in green, then a VERIFIED stamp.
 
 Open the HashScan link on the receipt to show the message is really there, and note that
 the verifier just read the public mirror node — it never asked our server anything.
+
+---
+
+## The check that isn't ours (60s — the strongest 60 seconds you have)
+
+Switch to `oracle.capture_claim`. Source `https://www.whitehouse.gov/presidential-actions/`,
+selector `.wp-block-post-title`, 3 matches. Buy it, then verify.
+
+> Fifteen checks. Fourteen of them are us checking our own homework — we produced the
+> answer, the page, the screenshot, and the hashes over all three. The fifteenth is a
+> signature from a Reclaim attestor that opened the TLS connection to whitehouse.gov
+> alongside us and signed that the response really contained this headline. We cannot
+> produce that signature. We do not have the key.
+
+Then break it in front of them, because a check nobody has seen fail proves nothing:
+
+```bash
+node -e "const f='result-proof.proof.json',fs=require('fs'),p=JSON.parse(fs.readFileSync(f));p.signatures.claimSignature['8']^=1;fs.writeFileSync(f,JSON.stringify(p,null,2))"
+pnpm verify --topic 0.0.10413059 --seq 18 --result ./result-proof.json   --capability oracle.capture_claim --submitter 0.0.10410493
+```
+
+> One bit. Two checks go red — the proof no longer hashes to what the receipt committed
+> to, and the signature no longer verifies.
+
+If you have a spare thirty seconds, the sharper version: swap in a **different but
+genuine** proof of another page. The signature still verifies, because it is real. Only
+the hash commitment catches it — which is exactly why the receipt commits to the proof
+rather than just noting that one exists.
+
+> Why this capability and not the others? Because proving a public page took 2.1 seconds
+> and proving one behind a login took 28. Nothing to hide means nothing to prove in zero
+> knowledge. So captures get a witness and logged-in jobs do not, and the receipt says
+> which is which rather than pretending.
 
 ---
 

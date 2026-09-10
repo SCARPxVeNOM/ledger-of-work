@@ -23,25 +23,32 @@ Read this before anything else, because the distinction is the whole product.
 - the price follows a price book published *before* the job ran
 - the job was recorded by the seller's account, not forged by a third party
 
-**It does not prove the data is true.** The receipt commits to what the seller *returned*.
-A dishonest seller could fabricate an answer and hash the fabrication faithfully, and
-every check above would still pass. If the site itself was wrong, the receipt records a
-wrong answer perfectly.
+**It does not prove the site was right.** If the source itself was wrong, the receipt
+records a wrong answer perfectly. Nothing here is a fact-checker.
 
-So the accurate claim today is **tamper-evidence, not proof of retrieval**: the seller
-must commit publicly, at the moment of delivery, before knowing whether anyone will
-challenge it — and cannot revise that story afterwards. That is genuinely useful and
-narrower than "verified data".
+**And until recently it did not prove the seller went to the source at all.** Every hash
+above is taken over something the seller produced, so a seller willing to fabricate an
+answer could hash the fabrication faithfully and pass every check. Two things now stand
+in the way of that:
 
-**What narrows it.** Every receipt also commits to a hash of the **fully rendered page**
-and a **full-page screenshot**, and the buyer receives both files. Faking a job now means
-producing a convincing page and a matching screenshot that a human can open and look at,
-rather than editing one field in a JSON file. Each artifact is checked independently —
-flip a single bit in the screenshot and that check goes red while the result and page
-stay green.
+**The evidence bundle**, on every receipt: a hash of the **fully rendered page** and a
+**full-page screenshot**, with both files handed to the buyer. Faking a job means
+producing a convincing page and a matching screenshot a human can open and look at,
+rather than editing one field in a JSON file. Each is checked independently — flip a
+single bit in the screenshot and that check goes red while the result and page stay
+green. This raises the cost of lying; it does not make lying impossible.
 
-Closing the gap properly means proving the retrieval itself. See
-[Proving retrieval](#proving-retrieval-not-just-delivery) for where that stands.
+**The retrieval proof**, on capabilities that can carry one: an independent
+[Reclaim](https://reclaimprotocol.org/) attestor opens the TLS session alongside the
+worker and signs that the response from the source contained the answer. This is the only
+commitment on the receipt that is not ours — we cannot forge it, because we do not hold
+the attestor's key. See [Proving retrieval](#proving-retrieval-not-just-delivery).
+
+Even with a proof, the honest claim is **a witness, not mathematics**: "an independent
+attestor observed this TLS session", not "this is unforgeable". Compromise the attestor
+and the signature is worth what any signature from a compromised key is worth. And a
+receipt that carries *no* proof is reported as unproven rather than fine — the verifier
+never treats a missing check as a passing one.
 
 ## Why web jobs
 
@@ -65,53 +72,78 @@ filter, paginate, extract — and returns structured output.
 time. A two-step job costs less than a nine-step one, and the unit prices are published
 in advance so a buyer can compute the price themselves.
 
-**The receipt** records, for every job: hashes of the result, the rendered page and a
-screenshot, the source URLs,
-timestamps, which capability ran, the work performed, the price charged, the payment
-reference, and the paying agent. Hashes rather than payloads, so integrity is provable
-without republishing content that isn't ours to redistribute.
+**The receipt** records, for every job: hashes of the result, the rendered page, a
+screenshot and — where one could be obtained — an attestor's retrieval proof, plus the
+source URLs, timestamps, which capability ran, the work performed, the price charged, the
+payment reference, and the paying agent. Hashes rather than payloads, so integrity is
+provable without republishing content that isn't ours to redistribute, and so the whole
+record fits the 1024 bytes an HCS message gets before it is split into chunks the mirror
+REST API will not reassemble.
+
+**The capability that has a buyer** is `oracle.capture_claim`: name a source document, a
+CSS rule, and optionally something to click, and get back what it says with the whole
+evidence bundle behind it. Built for settling a dispute about a primary source — the case
+where [a $7M prediction-market resolution](https://orochi.network/blog/oracle-manipulation-in-polymarket-2025)
+came down to a link and a screenshot nobody could check. Sources are allowlisted, and the
+list only grows by someone reading a site's robots.txt first.
 
 ## Proving retrieval, not just delivery
 
-The honest gap above has a known fix, and the research for it is done.
-
 [zkTLS](https://blog.reclaimprotocol.org/posts/zk-in-zktls) proves that a byte-string
-genuinely came from a site's TLS session — which is exactly the thing a hash of our own
-output cannot do. The obstacle looked fatal: zkTLS proves a *single* HTTPS response,
-while these jobs are multi-step browser sessions.
+genuinely came from a site's TLS session — exactly the thing a hash of our own output
+cannot do. The obstacle looked fatal: zkTLS proves a *single* HTTPS response, while these
+jobs are multi-step browser sessions.
 
-Watching the network says otherwise. Virgo renders its results from one request:
+The resolution is a split: **the browser does the navigating; the attestor proves the one
+response that carries the answer.** For `oracle.capture_claim` that is the document
+itself.
 
-```
-POST https://pool-solr-ws-uva-library.internal.lib.virginia.edu/api/search  ->  40,877 bytes JSON
-```
+It works, on testnet, today. Receipt
+[seq 18](https://hashscan.io/testnet/topic/0.0.10413059) verifies 15/15, including a
+signature from attestor `0x2448…9072`. Three separate checks have to hold:
 
-So the split is **the browser does the navigating; zkTLS proves the response carrying the
-answer**. `@reclaimprotocol/attestor-core` runs server-side, supports POST with a body and
-custom headers, and takes a `cookieStr` — so a session the browser established can be
-replayed through an independent attestor that witnesses the TLS exchange.
+| Check | Catches |
+| --- | --- |
+| the proof is the one the receipt committed to | a genuine proof of some *other* page swapped in afterwards |
+| an independent attestor signed it | a forged or edited proof |
+| the witnessed response covers the answer sold | witnessing a real page while returning something it does not say |
 
-Two caveats, stated now rather than discovered later:
+All three were confirmed by breaking them. Flipping one bit of the signature fails two.
+Substituting a different *genuine* proof fails only the first — its signature is real,
+which is precisely why the commitment has to exist. Supplying no proof fails all three as
+"not checked".
 
-- It introduces a **witness, not mathematics**. The claim becomes "an independent attestor
-  observed this session", not "this is unforgeable". Much better than today; not absolute.
-- It would prove the answer-bearing response, not the clicking that reached it.
+**What it costs, measured.** Proof time tracks what has to stay *hidden*, not response
+size:
 
-Status: **researched and specified, not built.** Attempting it is the current piece of
-work, on a hard timebox — see the plan in the commit history. If it does not land, this
-section says so rather than quietly disappearing.
+| Target | Size | Time | Why |
+| --- | --- | --- | --- |
+| whitehouse.gov, public GET | 263 KB | **2.1s** | nothing to hide, so no ZK proving at all |
+| Virgo search, bearer token | 40 KB | 28s | 25s generating 8 ZK proofs to keep the token secret |
+
+That is why `oracle.capture_claim` is wired up and the credentialed capabilities are not:
+2 seconds fits inside a paid request and 28 does not. `packages/proof` is the wrapper;
+`scripts/spike-zktls*.mjs` are the throwaway spikes that established the numbers, kept
+because they are the evidence for them.
+
+**Limits, stated rather than discovered.** It proves the answer-bearing response, not the
+clicking that reached it. It needs a source whose answer arrives in one response — a
+client-rendered page has none, and the adapter returns null rather than attempting it. And
+the witness is a third party, with everything that implies.
 
 ## Status
 
-**Working end to end on Hedera testnet.** Two real jobs have been quoted, paid for
+**Working end to end on Hedera testnet.** Eighteen real jobs have been quoted, paid for
 through the Blocky402 facilitator, executed against live sites, receipted on HCS, and
-independently verified.
+independently verified — including one that failed and was charged nothing, and one whose
+answer carries an independent attestor's signature.
 
 | Component | State |
 | --- | --- |
 | `packages/protocol` — receipt schema, canonical hashing, meter, verifier checks | done |
 | `packages/worker` — site adapters, Playwright runtime, work meter | done |
-| Real-site adapters (govinfo.gov, UVa Library Virgo) | done |
+| Real-site adapters (whitehouse.gov, govinfo.gov, UVa Library Virgo) | done |
+| `packages/proof` — zkTLS retrieval proofs, produced and checked | done |
 | `packages/receipts` — HCS publisher + mirror-node reader | done |
 | `apps/seller` — x402 resource server | done |
 | `apps/buyer-cli` — buying agent | done |
@@ -123,7 +155,9 @@ independently verified.
 | HTS token as payment asset | done |
 | Agent card on Hedera File Service | done |
 
-225 tests, none of which touch the network.
+263 tests, none of which touch the network. The proof tests run against a real attestor
+signature captured on 2026-09-09, because a hand-built fixture cannot tell a valid
+signature from a forged one and every test would pass.
 
 ## Evidence
 
@@ -139,6 +173,10 @@ Two jobs against the same capability, differing only in size:
 A 5x price difference for 4x the work, settled exactly, on chain. That spread is the
 whole argument for pay-per-job over pay-per-call.
 
+**Sequence 18** is the one to look at if you only look at one: an `oracle.capture_claim`
+job against whitehouse.gov that verifies 15/15, with the fifteenth check being a
+signature from an attestor we do not control.
+
 The same job also settles in an HTS token ([`0.0.10416991`](https://hashscan.io/testnet/token/0.0.10416991),
 "WORK", 2 decimals) at a published rate of 0.001 units per tinybar — so the 312,000-tinybar
 quote becomes 3.12 WORK. An agent holding a stablecoin should not have to hold the
@@ -153,7 +191,7 @@ whole pitch on its own — run it yourself:
 ```
 site                          fetchable  crawlable  apiless
 quotes.toscrape.com           yes        yes        no       <- has /api/quotes
-books.toscrape.com            yes        yes        yes
+books.toscrape.com            yes        yes        yes      <- adapter since retired
 govinfo.gov                   no         yes        no       <- has api.govinfo.gov
 search.lib.virginia.edu       no         yes        yes*     <- see below
 congress.gov                  no         no         no
@@ -219,26 +257,38 @@ examined either disallowed crawling outright (`leginfo.legislature.ca.gov` disal
 everything; `congress.gov` disallows search and 403s plain clients) or blocked
 unauthenticated readers, which is itself a finding about this market.
 
-Verifying the first one, from public data only:
+Verifying the capture job, from public data only:
 
 ```
 PASS  Receipt message present and unchunked
 PASS  Submitted by the expected service account
-PASS  Receipt parses at a known schema version
+PASS  Receipt parses at a known schema version                  v=3
 PASS  Result matches the recorded hash
-PASS  Consensus timestamp is coherent with the claimed finish   1792ms after finishedAt
-PASS  Settlement succeeded for exactly the charged amount       312000 tinybar to 0.0.10410493
+PASS  Page HTML matches the recorded hash
+PASS  Screenshot matches the recorded hash
+PASS  Retrieval proof is the one the receipt committed to
+PASS  The witnessed response covers the answer sold             www.whitehouse.gov confirmed
+                                                               to have returned "Patriot Day
+                                                               2026, The 25th Anniversary of
+                                                               the Se", which is in the answer
+PASS  Consensus timestamp is coherent with the claimed finish   6720ms after finishedAt
+PASS  Settlement succeeded for exactly the charged amount       321000 tinybar to 0.0.10410493
 PASS  Named paying agent is a net sender in the transaction     0.0.10410543 debited
 PASS  Quote follows the published price book
 PASS  Charged exactly what was quoted
-PASS  Work performed, priced for comparison                     matches the charge exactly
+PASS  Work performed, priced for comparison                     249000 tinybar of work against
+                                                               321000 charged; the plan
+                                                               overestimated and the seller
+                                                               keeps the difference
+PASS  An independent attestor signed this claim                 0x244897572368eadf65bfbc5aec98d8e5443a9072
 
-VERIFIED — 10/10 checks passed
+VERIFIED — 15/15 checks passed
 ```
 
 Change one character of the result and the fourth check goes red while the rest stay
-green — which is what makes it evidence rather than decoration. The verifier exits
-non-zero on failure.
+green — which is what makes it evidence rather than decoration. Flip one bit of the
+screenshot and only the screenshot check moves. Flip one bit of the attestor's signature
+and two go red. The verifier exits non-zero on failure.
 
 ## Try it
 
