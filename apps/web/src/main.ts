@@ -9,7 +9,7 @@ import {
   payloadFromSignedBytes,
   type PaymentRequirements,
 } from "@low/buyer-cli";
-import { readUsage, verifyFromMirror } from "@low/receipts";
+import { readUsage, verifyFromMirror, type VerifyRequest } from "@low/receipts";
 import { CATALOGUE } from "@low/worker";
 
 /**
@@ -144,19 +144,31 @@ const server = createServer(async (req, res) => {
       return;
     }
 
-    // Fonts and their stylesheet, self-hosted so the page owes nothing to a CDN. The
+    // The app bundle, its stylesheet, and the self-hosted fonts. The
     // allowlist is a literal set rather than a path join: this server sits in front of a
     // repo checkout, and "serve whatever is under public/" is one `..` away from serving
     // the seller's environment.
-    if (path === "/fonts.css" || /^\/fonts\/[\w.-]+\.(woff2|txt)$/.test(path)) {
+    if (
+      path === "/fonts.css" ||
+      path === "/app.css" ||
+      path === "/app.js" ||
+      /^\/fonts\/[\w.-]+\.(woff2|txt)$/.test(path)
+    ) {
       try {
         const file = readFileSync(join(HERE, "..", "public", path.replace(/^\//, "")));
         const type = path.endsWith(".css")
           ? "text/css; charset=utf-8"
-          : path.endsWith(".woff2")
-            ? "font/woff2"
-            : "text/plain; charset=utf-8";
-        res.writeHead(200, { "content-type": type, "cache-control": "public, max-age=31536000" });
+          : path.endsWith(".js")
+            ? "text/javascript; charset=utf-8"
+            : path.endsWith(".woff2")
+              ? "font/woff2"
+              : "text/plain; charset=utf-8";
+        // The bundles are rebuilt on every deploy and share a name, so they must not be
+        // cached for a year the way the content-addressed fonts can be.
+        const cache = path.startsWith("/fonts")
+          ? "public, max-age=31536000"
+          : "public, max-age=300, must-revalidate";
+        res.writeHead(200, { "content-type": type, "cache-control": cache });
         res.end(file);
       } catch {
         res.writeHead(404).end("not found");
@@ -301,6 +313,13 @@ const server = createServer(async (req, res) => {
         sequenceNumber: number;
         result: unknown;
         capability?: string;
+        // The artifacts the buyer was handed when the job ran. Passing them back is what
+        // lets the evidence and retrieval checks actually run: without them the verifier
+        // reports "not checked" — correctly, but the page then stamps VOID on a receipt
+        // that is perfectly good, which is a worse lie than the one it is guarding against.
+        pageHtml?: string;
+        screenshotBase64?: string;
+        retrievalProof?: unknown;
       };
       const priceBook = body.capability ? CATALOGUE[body.capability]?.spec.priceBook : undefined;
       const out = await verifyFromMirror(
@@ -310,6 +329,13 @@ const server = createServer(async (req, res) => {
           result: body.result,
           expectedSubmitter: env("SELLER_ACCOUNT_ID"),
           ...(priceBook ? { priceBook } : {}),
+          ...(typeof body.pageHtml === "string" ? { pageHtml: body.pageHtml } : {}),
+          ...(typeof body.screenshotBase64 === "string"
+            ? { screenshot: Buffer.from(body.screenshotBase64, "base64") }
+            : {}),
+          ...(body.retrievalProof
+            ? { retrievalProof: body.retrievalProof as NonNullable<VerifyRequest["retrievalProof"]> }
+            : {}),
         },
         process.env.MIRROR_NODE_URL ? { baseUrl: process.env.MIRROR_NODE_URL } : {},
       );

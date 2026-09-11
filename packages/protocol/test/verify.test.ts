@@ -428,3 +428,71 @@ describe("retrieval proofs — the only check the seller cannot manufacture", ()
     expect(droppedSources).toBeGreaterThan(0);
   });
 });
+
+describe("a check that could not be run is not a check that failed", () => {
+  const v3 = (over: Partial<Parameters<typeof makeReceipt>[0]> = {}) =>
+    makeReceipt({
+      v: 3,
+      retrieval: RETRIEVAL,
+      evidence: { ...EVIDENCE, capturedAt: undefined },
+      ...over,
+    });
+
+  const run = (
+    receipt: ReturnType<typeof makeReceipt>,
+    extra: Record<string, unknown> = {},
+  ) =>
+    verifyReceipt({
+      resultHash: hashCanonical(RESULT),
+      message: makeMessage(receipt),
+      transaction: makeTransaction(receipt),
+      expectedSubmitter: SELLER,
+      priceBook: PRICE_BOOK,
+      ...extra,
+    });
+
+  const byId = (out: ReturnType<typeof run>, id: string) => out.checks.find((c) => c.id === id);
+
+  it("stays ok when the only shortfall is something it could not check", () => {
+    // The bug this pins: every capability that cannot carry a zkTLS proof — which is most
+    // of them, because proving a credentialed request costs 28 seconds against 2 — was
+    // stamped VOID for the absence of one. That accuses the seller on the strength of a
+    // check nobody ran.
+    const out = run(makeReceipt({ v: 3 }), {
+      pageHash: EVIDENCE.pageHash,
+      screenshotHash: EVIDENCE.screenshotHash,
+    });
+    expect(byId(out, "retrieval-hash")?.ok).toBe(false);
+    expect(byId(out, "retrieval-hash")?.unchecked).toBe(true);
+    expect(out.ok).toBe(true);
+  });
+
+  it("marks artifacts the caller did not supply as unchecked, not failed", () => {
+    const out = run(v3());
+    for (const id of ["page", "screenshot", "retrieval-hash", "retrieval-coverage"]) {
+      expect(byId(out, id)?.unchecked, `${id} should be unchecked`).toBe(true);
+    }
+    expect(out.ok).toBe(true);
+  });
+
+  it("still goes red when something genuinely does not match", () => {
+    // The distinction must not become an excuse. A supplied artifact that disagrees with
+    // the receipt is a failure, and no amount of tri-state softens it.
+    const out = run(v3(), {
+      pageHash: `sha256:${"00".repeat(32)}`,
+      screenshotHash: EVIDENCE.screenshotHash,
+      retrievalProofHash: RETRIEVAL.proofHash,
+      retrievalCoverage: { ok: true, detail: "witnessed" },
+    });
+    expect(byId(out, "page")?.ok).toBe(false);
+    expect(byId(out, "page")?.unchecked).toBeUndefined();
+    expect(out.ok).toBe(false);
+  });
+
+  it("never marks a check both passed and unchecked", () => {
+    const out = run(v3());
+    for (const c of out.checks) {
+      expect(c.ok && c.unchecked, `${c.id} claims to have both passed and not run`).toBeFalsy();
+    }
+  });
+});

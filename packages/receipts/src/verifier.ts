@@ -135,7 +135,9 @@ export async function verifyFromMirror(
 
   let checks: CheckResult[] = transactionError
     ? output.checks.map((c) =>
-        c.id === "payment" ? { ...c, ok: false, detail: `could not resolve settlement: ${transactionError}` } : c,
+        c.id === "payment"
+          ? { ...c, ok: false, detail: `could not resolve settlement: ${transactionError}` }
+          : c,
       )
     : output.checks;
 
@@ -159,6 +161,7 @@ export async function verifyFromMirror(
           id: "proof-signature",
           label: "An independent attestor signed this claim",
           ok: false,
+          unchecked: true,
           detail: `not checked — supply the proof the seller returned alongside the result`,
         },
       ];
@@ -172,7 +175,8 @@ export async function verifyFromMirror(
   return {
     ...output,
     checks,
-    ok: checks.every((c) => c.ok),
+    // Same rule as the core verifier: a check that could not be run is not a failure.
+    ok: checks.every((c) => c.ok || c.unchecked),
     evidence: {
       mirrorUrl: mirror.baseUrl,
       messageUrl: `${mirror.baseUrl}/topics/${request.topicId}/messages/${request.sequenceNumber}`,
@@ -187,6 +191,11 @@ export async function verifyFromMirror(
 export function formatChecks(checks: CheckResult[]): string {
   const width = Math.max(...checks.map((c) => c.label.length));
   return checks
-    .map((c) => `  ${c.ok ? "PASS" : "FAIL"}  ${c.label.padEnd(width)}  ${c.detail}`)
+    .map((c) => {
+      // Three verdicts, because "this is wrong" and "you did not give me enough to say"
+      // are different answers, and printing both as FAIL loses the difference.
+      const verdict = c.ok ? "PASS" : c.unchecked ? "SKIP" : "FAIL";
+      return `  ${verdict}  ${c.label.padEnd(width)}  ${c.detail}`;
+    })
     .join("\n");
 }

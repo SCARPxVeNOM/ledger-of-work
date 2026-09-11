@@ -107,6 +107,16 @@ export function verifyReceipt(input: VerifyInput): VerifyOutput {
     return ok;
   };
 
+  /**
+   * A check that could not be run, as distinct from one that failed.
+   *
+   * Always `ok: false` — nothing here has been proven — but flagged so the verdict can
+   * tell "this is wrong" apart from "you did not give me enough to say".
+   */
+  const cannotCheck = (id: string, label: string, detail: string): void => {
+    checks.push({ id, label, ok: false, unchecked: true, detail });
+  };
+
   // 1. The message exists and is whole.
   const chunked = (input.message.chunk_info?.total ?? 1) > 1;
   if (
@@ -177,7 +187,7 @@ export function verifyReceipt(input: VerifyInput): VerifyOutput {
     ];
     for (const [id, label, supplied, recorded] of pair) {
       if (supplied === undefined) {
-        add(id, label, false, `not checked — supply the artifact to compare against ${recorded}`);
+        cannotCheck(id, label, `not checked — supply the artifact to compare against ${recorded}`);
       } else {
         add(
           id,
@@ -188,10 +198,9 @@ export function verifyReceipt(input: VerifyInput): VerifyOutput {
       }
     }
   } else if (receipt.v >= 2) {
-    add(
+    cannotCheck(
       "page",
       "Page HTML matches the recorded hash",
-      false,
       `this v${receipt.v} receipt records no evidence — the page could not be captured`,
     );
   }
@@ -207,10 +216,9 @@ export function verifyReceipt(input: VerifyInput): VerifyOutput {
   // whole exercise exists to stop assuming.
   if (receipt.retrieval) {
     if (input.retrievalProofHash === undefined) {
-      add(
+      cannotCheck(
         "retrieval-hash",
         "Retrieval proof is the one the receipt committed to",
-        false,
         `not checked — supply the proof to compare against ${receipt.retrieval.proofHash}`,
       );
     } else {
@@ -226,10 +234,9 @@ export function verifyReceipt(input: VerifyInput): VerifyOutput {
     }
 
     if (input.retrievalCoverage === undefined) {
-      add(
+      cannotCheck(
         "retrieval-coverage",
         "The witnessed response covers the answer sold",
-        false,
         `not checked — supply the proof returned beside the result, which the receipt commits to as ${receipt.retrieval.proofHash}`,
       );
     } else {
@@ -241,10 +248,12 @@ export function verifyReceipt(input: VerifyInput): VerifyOutput {
       );
     }
   } else if (receipt.v >= 3) {
-    add(
+    // Not a failure. Most capabilities cannot carry a retrieval proof at all — proving a
+    // credentialed request costs 28 seconds against 2 — so failing them for its absence
+    // would stamp VOID on every job that was never going to have one.
+    cannotCheck(
       "retrieval-hash",
       "Retrieval proof is the one the receipt committed to",
-      false,
       "this receipt carries no retrieval proof — the answer is only as good as the seller's word",
     );
   }
@@ -360,7 +369,9 @@ export function verifyReceipt(input: VerifyInput): VerifyOutput {
     add("meter", "Quote follows the published price book", false, "no price book supplied");
   }
 
-  return { ok: checks.every((c) => c.ok), checks, receipt };
+  // A verdict, not a score: anything that actually failed makes this false, while checks
+  // that could not be run leave it true and are reported as unchecked in their own right.
+  return { ok: checks.every((c) => c.ok || c.unchecked), checks, receipt };
 }
 
 /**

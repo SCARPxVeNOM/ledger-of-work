@@ -56,6 +56,8 @@ summary { cursor: pointer; font-size: 11px; letter-spacing: .09em; text-transfor
 @keyframes print { from { opacity: 0; transform: translateX(-6px); } }
 .chk .verdict { font-weight: 600; letter-spacing: .1em; font-size: 11px; }
 .chk.pass .verdict { color: var(--green); }
+.chk.skip .verdict { color: var(--ink-faint); }
+.chk.skip { opacity: .72; }
 .chk.fail .verdict { color: var(--red); }
 .chk.fail { background: rgba(179,55,44,.06); }
 .chk .detail { color: var(--ink-faint); font-size: 11.5px; word-break: break-word; }

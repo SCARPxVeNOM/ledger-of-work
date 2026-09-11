@@ -191,4 +191,17 @@ export interface CheckResult {
   label: string;
   ok: boolean;
   detail: string;
+  /**
+   * True when this check could not be run at all, as distinct from having failed.
+   *
+   * The difference is the whole reason this field exists. "The screenshot does not match"
+   * and "you did not give me the screenshot" are both `ok: false`, and treating them the
+   * same means a receipt is stamped VOID for a capability that legitimately cannot carry
+   * a retrieval proof — which accuses the seller of something on the basis of a check
+   * nobody ran.
+   *
+   * Stamping such a receipt VERIFIED would be the opposite overclaim. So the verdict has
+   * three states, and this is what separates the middle one from the bad one.
+   */
+  unchecked?: boolean;
 }

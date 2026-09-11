@@ -113,11 +113,17 @@ function render(checks: CheckResult[], ok: boolean, evidence: string[]): void {
   list.innerHTML = "";
   checks.forEach((c, i) => {
     const row = document.createElement("div");
-    row.className = `chk ${c.ok ? "pass" : "fail"}`;
+    // A check that could not be run is neither green nor red: it is a question nobody
+    // answered, and colouring it red accuses the seller of something on no evidence.
+    row.className = `chk ${c.ok ? "pass" : c.unchecked ? "skip" : "fail"}`;
     row.style.animationDelay = `${i * 55}ms`;
     row.innerHTML =
       '<span class="verdict"></span><span><span class="label"></span><br><span class="detail"></span></span>';
-    (row.querySelector(".verdict") as HTMLElement).textContent = c.ok ? "PASS" : "FAIL";
+    (row.querySelector(".verdict") as HTMLElement).textContent = c.ok
+      ? "PASS"
+      : c.unchecked
+        ? "SKIP"
+        : "FAIL";
     (row.querySelector(".label") as HTMLElement).textContent = c.label;
     (row.querySelector(".detail") as HTMLElement).textContent = c.detail;
     list.append(row);
@@ -126,7 +132,8 @@ function render(checks: CheckResult[], ok: boolean, evidence: string[]): void {
   const stamp = $("stamp");
   stamp.className = "stamp";
   setTimeout(() => {
-    stamp.textContent = ok ? "VERIFIED" : "VOID";
+    const skipped = checks.filter((c) => !c.ok && c.unchecked).length;
+    stamp.textContent = !ok ? "VOID" : skipped ? "PARTLY" : "VERIFIED";
     stamp.className = `stamp show ${ok ? "ok" : "void"}`;
   }, checks.length * 55 + 120);
 

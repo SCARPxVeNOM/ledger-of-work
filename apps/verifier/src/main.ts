@@ -122,5 +122,20 @@ if (out.evidence.transactionUrl) console.log(`  ${out.evidence.transactionUrl}`)
 console.log(`  ${out.evidence.hashscanTopicUrl}`);
 if (out.evidence.hashscanTransactionUrl) console.log(`  ${out.evidence.hashscanTransactionUrl}`);
 
-console.log(`\n${out.ok ? "VERIFIED" : "FAILED"} — ${out.checks.filter((c) => c.ok).length}/${out.checks.length} checks passed`);
+const passed = out.checks.filter((c) => c.ok).length;
+const skipped = out.checks.filter((c) => !c.ok && c.unchecked).length;
+const failed = out.checks.length - passed - skipped;
+
+// Three verdicts. VERIFIED overclaims when something could not be checked at all, and
+// FAILED accuses the seller of a fault when the only problem is a file nobody supplied.
+const verdict = failed > 0 ? "FAILED" : skipped > 0 ? "PARTLY VERIFIED" : "VERIFIED";
+console.log(
+  `\n${verdict} — ${passed}/${out.checks.length} checks passed` +
+    (skipped ? `, ${skipped} could not be run` : "") +
+    (failed ? `, ${failed} failed` : ""),
+);
+if (skipped && !failed) {
+  console.log("  Nothing here contradicts the receipt; part of it simply was not checkable");
+  console.log("  from what was supplied. Pass the artifacts saved beside the result file.");
+}
 process.exit(out.ok ? 0 : 1);

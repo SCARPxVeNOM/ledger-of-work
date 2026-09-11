@@ -1,0 +1,144 @@
+@import "tailwindcss";
+
+/**
+ * The design system, as tokens.
+ *
+ * Tailwind v4 takes its theme from CSS rather than a config file, so this is the single
+ * place the palette and type scale live — a colour used in a component is a token defined
+ * here, never a hex literal.
+ *
+ * Three families, deliberately:
+ *   serif  editorial headings, the voice of the page
+ *   sans   interface text, quiet and legible
+ *   mono   anything that is a *value* — ids, amounts, timestamps, status
+ *
+ * The mono rule is load-bearing rather than decorative. This product is about numbers
+ * somebody might dispute, and a figure set in a proportional face invites skimming.
+ * Serif and mono are self-hosted (see /fonts.css); the sans is a system stack, because a
+ * third webfont is ~40KB to say things the reader is not looking at.
+ */
+@theme {
+  --color-paper: #f4f1e9;
+  --color-paper-deep: #eae5d8;
+  --color-paper-raised: #faf8f3;
+  --color-ink: #17140f;
+  --color-ink-soft: #63594a;
+  --color-ink-faint: #9c9384;
+  --color-rule: #ddd5c2;
+  --color-rule-soft: #e9e2d2;
+  --color-accent: #a8332a;
+  --color-accent-soft: #c9594e;
+  --color-pass: #2c6e4b;
+  --color-void: #a8332a;
+
+  --font-serif: "Instrument Serif", Georgia, "Times New Roman", serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Inter, Roboto, sans-serif;
+
+  --text-display: clamp(2.75rem, 7vw, 5.75rem);
+  --text-display--line-height: 0.94;
+  --text-display--letter-spacing: -0.022em;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  /* Paper grain. Barely there — it should read as texture, never as noise. */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 60;
+    opacity: 0.28;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='.5'/%3E%3C/svg%3E");
+  }
+  ::selection {
+    background: var(--color-ink);
+    color: var(--color-paper);
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 3px;
+  }
+}
+
+@layer components {
+  /* Reveal on scroll. Opacity and a few pixels — anything larger reads as a slideshow. */
+  .reveal {
+    opacity: 0;
+    transform: translateY(14px);
+    transition:
+      opacity 0.7s cubic-bezier(0.2, 0.7, 0.3, 1),
+      transform 0.7s cubic-bezier(0.2, 0.7, 0.3, 1);
+  }
+  .reveal.shown {
+    opacity: 1;
+    transform: none;
+  }
+
+  /* The meter's tick. Short and colourless — a flash of red on every step would read as
+     an error rather than as progress. */
+  @keyframes tick {
+    0% {
+      transform: translateY(-3px);
+      opacity: 0.35;
+    }
+    100% {
+      transform: none;
+      opacity: 1;
+    }
+  }
+  .ticking {
+    animation: tick 0.28s cubic-bezier(0.2, 0.8, 0.3, 1);
+  }
+
+  @keyframes print-in {
+    from {
+      opacity: 0;
+      transform: translateX(-7px);
+    }
+  }
+  .print-in {
+    animation: print-in 0.26s ease-out both;
+  }
+
+  @keyframes stamp-in {
+    0% {
+      opacity: 0;
+      transform: rotate(-16deg) scale(1.5);
+    }
+    60% {
+      opacity: 1;
+      transform: rotate(-7deg) scale(0.94);
+    }
+    100% {
+      opacity: 1;
+      transform: rotate(-7deg) scale(1);
+    }
+  }
+  .stamp-in {
+    animation: stamp-in 0.42s cubic-bezier(0.2, 0.9, 0.3, 1) both;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal,
+  .reveal.shown {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  .ticking,
+  .print-in,
+  .stamp-in {
+    animation: none;
+  }
+}
