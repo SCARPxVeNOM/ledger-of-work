@@ -236,3 +236,94 @@ export function FloatingCard({
     </motion.div>
   );
 }
+
+/**
+ * Text with a gradient that drifts across it.
+ *
+ * Upstream defaults to pink-purple-blue. Here it carries greens, because this is the one
+ * word on the page allowed to have a colour and green is what a passing check is already
+ * drawn in — the headline and the PASS badges are then saying the same thing.
+ *
+ * The visible span is `aria-hidden` with a screen-reader copy beside it: a gradient
+ * clipped to text is `color: transparent`, and some assistive tooling skips that.
+ */
+export function AuroraText({
+  children,
+  className = "",
+  colors = ["#15803d", "#22c55e", "#0d9488", "#16a34a"],
+  speed = 1,
+}: {
+  children: ReactNode;
+  className?: string;
+  colors?: string[];
+  speed?: number;
+}) {
+  const gradientStyle = {
+    backgroundImage: `linear-gradient(135deg, ${colors.join(", ")}, ${colors[0]})`,
+    WebkitBackgroundClip: "text",
+    WebkitTextFillColor: "transparent",
+    animationDuration: `${10 / speed}s`,
+  };
+
+  return (
+    <span className={cx("relative inline-block", className)}>
+      <span className="sr-only">{children}</span>
+      <span
+        className="animate-aurora relative bg-size-[200%_auto] bg-clip-text text-transparent"
+        style={gradientStyle}
+        aria-hidden="true"
+      >
+        {children}
+      </span>
+    </span>
+  );
+}
+
+/** A highlight that sweeps across text every few seconds. Used on the notice pill. */
+export function AnimatedShinyText({
+  children,
+  className,
+  shimmerWidth = 90,
+  ...props
+}: {
+  shimmerWidth?: number;
+} & ComponentPropsWithoutRef<"span">) {
+  return (
+    <span
+      style={{ "--shiny-width": `${shimmerWidth}px` } as React.CSSProperties}
+      className={cx(
+        "animate-shiny-text bg-clip-text bg-size-[var(--shiny-width)_100%] bg-position-[0_0] bg-no-repeat [transition:background-position_1s_cubic-bezier(.6,.6,0,1)_infinite]",
+        "bg-linear-to-r from-transparent via-black/70 via-50% to-transparent",
+        className,
+      )}
+      {...props}
+    >
+      {children}
+    </span>
+  );
+}
+
+/**
+ * The Hedera mark.
+ *
+ * Inlined rather than fetched: it is under 500 bytes, so a request for it would cost more
+ * than the bytes themselves, and inlining lets it take `currentColor` and sit correctly
+ * on both the light ground and the dark cards.
+ *
+ * Used to say which network this runs on. The shape is Hedera's trademark and is not
+ * altered — only recoloured, the way their own docs use it.
+ */
+export function HederaMark({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 2500 2500" role="img" aria-label="Hedera" className={cx("h-4 w-4", className)}>
+      <path
+        fill="currentColor"
+        d="M1250,0C559.64,0,0,559.64,0,1250S559.64,2500,1250,2500s1250-559.64,1250-1250S1940.36,0,1250,0"
+      />
+      <path
+        fill="var(--color-surface)"
+        d="M1758.12,1790.62H1599.38V1453.13H900.62v337.49H741.87V696.25H900.62v329.37h698.76V696.25h158.75Zm-850-463.75h698.75V1152.5H908.12Z"
+      />
+    </svg>
+  );
+}

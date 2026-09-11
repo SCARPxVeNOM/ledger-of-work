@@ -67,6 +67,35 @@
     }
   }
 
+  /* Aurora and shiny-text, as Magic UI expects to find them. The aurora keyframe is the
+     background-position half of upstream's; its rotate/scale half is fine on a badge and
+     wrong on a 5rem headline, which would visibly wobble. */
+  --animate-aurora: aurora 10s ease-in-out infinite alternate;
+  --animate-shiny-text: shiny-text 7s infinite;
+
+  @keyframes aurora {
+    0% {
+      background-position: 0% 50%;
+    }
+    50% {
+      background-position: 100% 50%;
+    }
+    100% {
+      background-position: 0% 50%;
+    }
+  }
+  @keyframes shiny-text {
+    0%,
+    90%,
+    100% {
+      background-position: calc(-100% - var(--shiny-width)) 0;
+    }
+    30%,
+    60% {
+      background-position: calc(100% + var(--shiny-width)) 0;
+    }
+  }
+
   --text-display: clamp(2.5rem, 6.4vw, 5rem);
   --text-display--line-height: 1.02;
   --text-display--letter-spacing: -0.042em;

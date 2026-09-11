@@ -16,7 +16,14 @@ import {
 import { MeterWidget, type MeterLine } from "./MeterWidget.js";
 import { AgentBar } from "./AgentBar.js";
 import { Art, FloatingArt } from "./Art.js";
-import { BorderBeam, Marquee, NumberTicker } from "./magicui.js";
+import {
+  AnimatedShinyText,
+  AuroraText,
+  BorderBeam,
+  HederaMark,
+  Marquee,
+  NumberTicker,
+} from "./magicui.js";
 
 /* ─────────────────────────────────────────────────────────────────────────────
  * Types, kept structural rather than imported.
@@ -139,12 +146,10 @@ function Nav({ wallet, onConnect, busy }: { wallet: string; onConnect: () => voi
           thing — a banner that says three is an advert. */}
       <div className="relative z-50 border-b border-line bg-accent-wash/70">
         <div className="mx-auto flex max-w-[1200px] items-center justify-center gap-2 px-6 py-2 text-center text-[12px]">
-          <span className="font-mono text-[10.5px] tracking-[0.14em] text-accent uppercase">
-            live
-          </span>
-          <span className="text-ink-soft">
+          <HederaMark className="h-3.5 w-3.5 text-ink" />
+          <AnimatedShinyText className="text-ink-soft">
             Running on Hedera testnet — every job below writes a real receipt
-          </span>
+          </AnimatedShinyText>
         </div>
       </div>
 
@@ -157,7 +162,8 @@ function Nav({ wallet, onConnect, busy }: { wallet: string; onConnect: () => voi
         <nav className="mx-auto flex h-16 max-w-[1200px] items-center justify-between gap-6 px-6">
           <a href="#top" className="flex items-center gap-2 whitespace-nowrap">
             <span className="text-[17px] font-semibold tracking-[-0.03em]">Ledger of Work</span>
-            <Pill tone="neutral" className="px-2 py-0.5 font-mono text-[9.5px] tracking-[0.1em]">
+            <Pill tone="neutral" className="gap-1.5 px-2 py-0.5 font-mono text-[9.5px] tracking-[0.1em]">
+              <HederaMark className="h-3 w-3" />
               TESTNET
             </Pill>
           </a>
@@ -203,7 +209,8 @@ function Hero({ manifest }: { manifest: Manifest | null }) {
 
         <Reveal delay={60}>
           <EditorialHeading as="h1" size="display" className="mt-7 max-w-[15ch]">
-            Work you can pay for. <MonoAccent>Receipted.</MonoAccent>
+            Work you can pay for.{" "}
+            <AuroraText className="font-mono font-medium tracking-[-0.03em]">Receipted.</AuroraText>
           </EditorialHeading>
         </Reveal>
 
@@ -345,7 +352,10 @@ function Trust() {
           {TRUST.map((t, i) => (
             <Reveal key={t.k} delay={i * 60}>
               <PaperCard className="h-full p-6">
-                <SectionLabel>{t.k}</SectionLabel>
+                <div className="flex items-center gap-2">
+                  <HederaMark className="h-3.5 w-3.5 text-ink-faint" />
+                  <SectionLabel>{t.k}</SectionLabel>
+                </div>
                 <p className="mt-3 text-[13.5px] leading-[1.6] text-ink-soft">{t.v}</p>
               </PaperCard>
             </Reveal>
@@ -362,7 +372,10 @@ function Footer({ manifest, usage }: { manifest: Manifest | null; usage: UsageSt
       <Divider />
       <div className="flex flex-col gap-8 pt-8 md:flex-row md:items-start md:justify-between">
         <div>
-          <p className="text-[17px] font-semibold tracking-[-0.03em]">Ledger of Work</p>
+          <p className="flex items-center gap-2 text-[17px] font-semibold tracking-[-0.03em]">
+            <HederaMark className="h-4 w-4" />
+            Ledger of Work
+          </p>
           <p className="mt-2 max-w-[42ch] text-[13px] leading-relaxed text-ink-soft">
             Proof of what a paid agent delivered. Built for the AI &amp; Agentic Payments on Hedera
             track.
@@ -503,10 +516,12 @@ export default function App() {
     [manifest, cap],
   );
 
-  const walletLabel = connected
-    ? `${connected.accountId} · yours`
-    : demoWallet
-      ? `${demoWallet} · demo`
+  // What the button says it will do, not what the page happens to know. Showing the demo
+  // account here made it read as a status display, so nobody pressed it.
+  const walletLabel = walletBusy
+    ? "Opening wallet…"
+    : connected
+      ? `${connected.accountId} · disconnect`
       : "Connect wallet";
 
   const onConnect = useCallback(async () => {
@@ -826,9 +841,39 @@ export default function App() {
                       <Pill>{quote.plan.pages} pages</Pill>
                     </div>
                     <PlusList items={quote.plan.outline} />
-                    <CTAButton data-testid="btn-run" full className="mt-7" onClick={onRun} disabled={running}>
+                    <CTAButton data-testid="btn-run" full className="mt-7" onClick={onRun} disabled={running || (!connected && !demoWallet)}>
                       {running ? "Working…" : "Pay and run"}
                     </CTAButton>
+
+                    {/* Who is about to pay, said where the paying happens. This used to be
+                        in the nav, where it read as a status badge rather than a choice. */}
+                    <p className="mt-3 text-center font-mono text-[10.5px] text-ink-faint">
+                      {connected ? (
+                        <>paying from your wallet · {connected.accountId}</>
+                      ) : demoWallet ? (
+                        <>
+                          paying from the demo wallet · {demoWallet} ·{" "}
+                          <button
+                            type="button"
+                            onClick={onConnect}
+                            className="underline decoration-line underline-offset-2 hover:text-ink"
+                          >
+                            use your own
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          no wallet ·{" "}
+                          <button
+                            type="button"
+                            onClick={onConnect}
+                            className="underline decoration-line underline-offset-2 hover:text-ink"
+                          >
+                            connect one to pay
+                          </button>
+                        </>
+                      )}
+                    </p>
                   </div>
                 )}
               </PaperCard>
