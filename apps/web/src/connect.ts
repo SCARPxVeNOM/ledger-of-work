@@ -62,6 +62,59 @@ async function getConnector(): Promise<DAppConnector> {
   return c;
 }
 
+/**
+ * Raised when WalletConnect's relay cannot be reached from this browser.
+ *
+ * Worth its own type because it is the one wallet failure that is not about the wallet.
+ * The relay is a WebSocket to `relay.walletconnect.org`, and ad blockers, tracker
+ * blockers and school or office DNS filters block that host by name — leaving the page
+ * with a pairing that can never be established and nothing at all in the console.
+ */
+export class RelayBlocked extends Error {
+  constructor() {
+    super(
+      "Your browser cannot reach WalletConnect's relay. An ad or tracker blocker, a " +
+        "privacy extension, or a network filter is usually the cause — allow " +
+        "relay.walletconnect.org, or use the demo wallet instead.",
+    );
+    this.name = "RelayBlocked";
+  }
+}
+
+/**
+ * Can this browser open a socket to the relay at all?
+ *
+ * Checked before anything else, because every later step waits on it. Without this the
+ * connector asks for a pairing URI, that request waits on a socket that will never open,
+ * and the modal is never shown — so the page sits on "connecting" with no modal, no
+ * error and no console output. Two seconds of probing turns that into a sentence that
+ * names the cause.
+ */
+async function relayReachable(timeoutMs = 4000): Promise<boolean> {
+  if (typeof WebSocket === "undefined") return true;
+  return new Promise((resolve) => {
+    let ws: WebSocket | undefined;
+    const finish = (ok: boolean) => {
+      clearTimeout(timer);
+      try {
+        ws?.close();
+      } catch {
+        /* already closing */
+      }
+      resolve(ok);
+    };
+    const timer = setTimeout(() => finish(false), timeoutMs);
+    try {
+      ws = new WebSocket(`wss://relay.walletconnect.org/?projectId=${PROJECT_ID}`);
+      ws.onopen = () => finish(true);
+      ws.onerror = () => finish(false);
+      ws.onclose = () => finish(false);
+    } catch {
+      finish(false);
+    }
+  });
+}
+
 /** Raised when the visitor dismisses the wallet modal. Not a fault; the caller says so. */
 export class WalletCancelled extends Error {
   constructor() {
@@ -88,7 +141,11 @@ export class WalletCancelled extends Error {
  * delivers an approval, which leaves the same pending promise by a different route. A
  * connection nobody is going to complete should end by itself.
  */
-export async function connectWallet(timeoutMs = 180_000): Promise<Connection> {
+export async function connectWallet(timeoutMs = 60_000): Promise<Connection> {
+  // Before the connector, not after: `init()` and `connectURI()` both wait on this socket,
+  // and waiting on a socket that will never open is the whole failure.
+  if (!(await relayReachable())) throw new RelayBlocked();
+
   const c = await getConnector();
 
   let timer: ReturnType<typeof setTimeout> | undefined;

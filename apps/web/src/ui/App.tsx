@@ -540,9 +540,10 @@ export default function App() {
     } catch (e) {
       // Closing the modal is a decision, not a failure. Reporting it in red alongside
       // real errors teaches people to ignore the red.
-      if ((e as Error).name !== "WalletCancelled") {
-        setError(`Could not connect: ${(e as Error).message}`);
-      }
+      // RelayBlocked already reads as a sentence to a person; the others need framing.
+      const err = e as Error;
+      if (err.name === "RelayBlocked") setError(err.message);
+      else if (err.name !== "WalletCancelled") setError(`Could not connect: ${err.message}`);
     } finally {
       setWalletBusy(false);
     }
