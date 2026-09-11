@@ -16,7 +16,12 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 const SPEC =
-  "https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Mono:wght@400;500;600&display=swap";
+  "https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1" +
+  "&family=IBM+Plex+Mono:wght@400;500;600" +
+  // The grotesk the demo UI is set in. Self-hosted rather than left to a system stack,
+  // because "whatever sans this machine has" is Segoe UI on Windows and SF on a Mac, and
+  // a display face at 80px shows that difference immediately.
+  "&family=Inter:wght@400;500;600&display=swap";
 
 // A browser UA, or the service returns truetype rather than woff2 — four times the bytes
 // for no benefit to any browser made this decade.

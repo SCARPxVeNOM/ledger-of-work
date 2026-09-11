@@ -7,37 +7,48 @@
  * place the palette and type scale live — a colour used in a component is a token defined
  * here, never a hex literal.
  *
- * Three families, deliberately:
- *   serif  editorial headings, the voice of the page
- *   sans   interface text, quiet and legible
- *   mono   anything that is a *value* — ids, amounts, timestamps, status
+ * ── The direction ───────────────────────────────────────────────────────────────
+ * Cool near-white ground, white surfaces lifted off it by a soft two-layer shadow and a
+ * hairline border. One grotesk sans carries everything including the display sizes, set
+ * tight and dark. Corners are generous: 999px on anything pressable, 14px on panels.
  *
- * The mono rule is load-bearing rather than decorative. This product is about numbers
- * somebody might dispute, and a figure set in a proportional face invites skimming.
- * Serif and mono are self-hosted (see /fonts.css); the sans is a system stack, because a
- * third webfont is ~40KB to say things the reader is not looking at.
+ * Mono is the accent rather than the body. It marks the things that are *values* — ids,
+ * amounts, timestamps, status — and one word per heading, which is the single loudest
+ * decision on the page. That rule is load-bearing rather than decorative: this product is
+ * about figures somebody might dispute, and a number set in a proportional face invites
+ * skimming past it.
  */
 @theme {
-  --color-paper: #f4f1e9;
-  --color-paper-deep: #eae5d8;
-  --color-paper-raised: #faf8f3;
-  --color-ink: #17140f;
-  --color-ink-soft: #63594a;
-  --color-ink-faint: #9c9384;
-  --color-rule: #ddd5c2;
-  --color-rule-soft: #e9e2d2;
-  --color-accent: #a8332a;
-  --color-accent-soft: #c9594e;
-  --color-pass: #2c6e4b;
-  --color-void: #a8332a;
+  --color-ground: #fafafa;
+  --color-surface: #ffffff;
+  --color-surface-sunk: #f4f4f5;
+  --color-ink: #272727;
+  --color-ink-soft: #5c5c5f;
+  --color-ink-faint: #8e8e93;
+  --color-line: #e8e8ea;
+  --color-line-strong: #dededf;
+  --color-ink-invert: #fbfbfb;
+  --color-accent: #1d4ed8;
+  --color-accent-wash: #eff4ff;
+  --color-pass: #15803d;
+  --color-void: #b42318;
+  --color-warn: #b45309;
 
-  --font-serif: "Instrument Serif", Georgia, "Times New Roman", serif;
+  /* One family for everything except values. Overused Grotesk is fanout's own; this is
+     the closest thing every machine already has, so nothing extra is downloaded. */
+  --font-sans:
+    "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Roboto, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Inter, Roboto, sans-serif;
 
-  --text-display: clamp(2.75rem, 7vw, 5.75rem);
-  --text-display--line-height: 0.94;
-  --text-display--letter-spacing: -0.022em;
+  --radius-card: 14px;
+  --radius-lg: 18px;
+
+  --shadow-soft: 0 1px 2px 0 rgb(59 59 59 / 0.09), 0 2px 4px 0 rgb(59 59 59 / 0.05);
+  --shadow-lift: 0 2px 4px 0 rgb(59 59 59 / 0.05), 0 8px 20px -6px rgb(59 59 59 / 0.14);
+
+  --text-display: clamp(2.5rem, 6.4vw, 5rem);
+  --text-display--line-height: 1.02;
+  --text-display--letter-spacing: -0.042em;
 }
 
 @layer base {
@@ -45,28 +56,20 @@
     scroll-behavior: smooth;
   }
   body {
-    background: var(--color-paper);
+    background: var(--color-ground);
     color: var(--color-ink);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
-  }
-  /* Paper grain. Barely there — it should read as texture, never as noise. */
-  body::before {
-    content: "";
-    position: fixed;
-    inset: 0;
-    pointer-events: none;
-    z-index: 60;
-    opacity: 0.28;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='.5'/%3E%3C/svg%3E");
+    text-rendering: optimizeLegibility;
   }
   ::selection {
     background: var(--color-ink);
-    color: var(--color-paper);
+    color: var(--color-ink-invert);
   }
   :focus-visible {
-    outline: 2px solid var(--color-accent);
-    outline-offset: 3px;
+    outline: 2px solid var(--color-ink);
+    outline-offset: 2px;
+    border-radius: 6px;
   }
 }
 
@@ -74,22 +77,22 @@
   /* Reveal on scroll. Opacity and a few pixels — anything larger reads as a slideshow. */
   .reveal {
     opacity: 0;
-    transform: translateY(14px);
+    transform: translateY(12px);
     transition:
-      opacity 0.7s cubic-bezier(0.2, 0.7, 0.3, 1),
-      transform 0.7s cubic-bezier(0.2, 0.7, 0.3, 1);
+      opacity 0.6s cubic-bezier(0.22, 0.7, 0.3, 1),
+      transform 0.6s cubic-bezier(0.22, 0.7, 0.3, 1);
   }
   .reveal.shown {
     opacity: 1;
     transform: none;
   }
 
-  /* The meter's tick. Short and colourless — a flash of red on every step would read as
-     an error rather than as progress. */
+  /* The meter's tick. Short and colourless — a flash of colour on every step would read
+     as an error rather than as progress. */
   @keyframes tick {
     0% {
-      transform: translateY(-3px);
-      opacity: 0.35;
+      transform: translateY(-2px);
+      opacity: 0.45;
     }
     100% {
       transform: none;
@@ -97,35 +100,35 @@
     }
   }
   .ticking {
-    animation: tick 0.28s cubic-bezier(0.2, 0.8, 0.3, 1);
+    animation: tick 0.26s cubic-bezier(0.2, 0.8, 0.3, 1);
   }
 
   @keyframes print-in {
     from {
       opacity: 0;
-      transform: translateX(-7px);
+      transform: translateY(4px);
     }
   }
   .print-in {
-    animation: print-in 0.26s ease-out both;
+    animation: print-in 0.24s ease-out both;
   }
 
   @keyframes stamp-in {
     0% {
       opacity: 0;
-      transform: rotate(-16deg) scale(1.5);
+      transform: scale(1.35);
     }
     60% {
       opacity: 1;
-      transform: rotate(-7deg) scale(0.94);
+      transform: scale(0.96);
     }
     100% {
       opacity: 1;
-      transform: rotate(-7deg) scale(1);
+      transform: scale(1);
     }
   }
   .stamp-in {
-    animation: stamp-in 0.42s cubic-bezier(0.2, 0.9, 0.3, 1) both;
+    animation: stamp-in 0.34s cubic-bezier(0.2, 0.9, 0.3, 1) both;
   }
 }
 

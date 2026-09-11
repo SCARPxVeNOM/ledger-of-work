@@ -3,9 +3,11 @@ import {
   CTAButton,
   Divider,
   EditorialHeading,
-  LedgerCard,
   MetadataRow,
+  MonoAccent,
   PaperCard,
+  Pill,
+  PlusList,
   ReceiptCard,
   Reveal,
   SectionLabel,
@@ -121,47 +123,60 @@ const NAV = [
 function Nav({ wallet, onConnect, busy }: { wallet: string; onConnect: () => void; busy: boolean }) {
   const [solid, setSolid] = useState(false);
   useEffect(() => {
-    const onScroll = () => setSolid(window.scrollY > 24);
+    const onScroll = () => setSolid(window.scrollY > 16);
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
   return (
-    <header
-      className={cx(
-        "fixed inset-x-0 top-0 z-50 transition-colors duration-300",
-        solid ? "border-b border-rule bg-paper/85 backdrop-blur-md" : "border-b border-transparent",
-      )}
-    >
-      <nav className="mx-auto flex h-14 max-w-[1180px] items-center justify-between gap-6 px-6 md:px-10">
-        <a href="#top" className="font-serif text-[19px] tracking-tight whitespace-nowrap">
-          Ledger of Work
-        </a>
+    <>
+      {/* The thin notice strip above everything. Tinted rather than loud, and it says one
+          thing — a banner that says three is an advert. */}
+      <div className="relative z-50 border-b border-line bg-accent-wash/70">
+        <div className="mx-auto flex max-w-[1200px] items-center justify-center gap-2 px-6 py-2 text-center text-[12px]">
+          <span className="font-mono text-[10.5px] tracking-[0.14em] text-accent uppercase">
+            live
+          </span>
+          <span className="text-ink-soft">
+            Running on Hedera testnet — every job below writes a real receipt
+          </span>
+        </div>
+      </div>
 
-        <ul className="hidden items-center gap-7 lg:flex">
-          {NAV.map((n) => (
-            <li key={n.href}>
-              <a
-                href={n.href}
-                className="group relative font-mono text-[11px] uppercase tracking-[0.12em] text-ink-soft transition-colors hover:text-ink"
-              >
-                {n.label}
-                <span className="absolute -bottom-1 left-0 h-px w-full origin-left scale-x-0 bg-ink transition-transform duration-300 group-hover:scale-x-100" />
-              </a>
-            </li>
-          ))}
-        </ul>
+      <header
+        className={cx(
+          "sticky top-0 z-40 transition-colors duration-300",
+          solid ? "border-b border-line bg-ground/80 backdrop-blur-md" : "border-b border-transparent",
+        )}
+      >
+        <nav className="mx-auto flex h-16 max-w-[1200px] items-center justify-between gap-6 px-6">
+          <a href="#top" className="flex items-center gap-2 whitespace-nowrap">
+            <span className="text-[17px] font-semibold tracking-[-0.03em]">Ledger of Work</span>
+            <Pill tone="neutral" className="px-2 py-0.5 font-mono text-[9.5px] tracking-[0.1em]">
+              TESTNET
+            </Pill>
+          </a>
 
-        <button
-          onClick={onConnect}
-          disabled={busy}
-          className="border border-rule px-3.5 py-1.5 font-mono text-[10.5px] uppercase tracking-[0.13em] whitespace-nowrap transition-colors hover:border-ink disabled:opacity-40"
-        >
-          {wallet}
-        </button>
-      </nav>
-    </header>
+          <ul className="hidden items-center gap-1 lg:flex">
+            {NAV.map((n) => (
+              <li key={n.href}>
+                <a
+                  href={n.href}
+                  className="rounded-full px-3 py-1.5 text-[13.5px] text-ink-soft transition-colors hover:bg-surface-sunk hover:text-ink"
+                >
+                  {n.label}
+                </a>
+              </li>
+            ))}
+          </ul>
+
+          <CTAButton size="sm" variant="ghost" onClick={onConnect} disabled={busy}>
+            <span className="font-mono text-[11.5px]">{wallet}</span>
+          </CTAButton>
+        </nav>
+      </header>
+    </>
   );
 }
 
@@ -171,37 +186,32 @@ function Hero({ manifest }: { manifest: Manifest | null }) {
   return (
     <section
       id="top"
-      className="mx-auto flex min-h-[92svh] max-w-[1180px] flex-col justify-center px-6 pt-28 pb-16 md:px-10"
+      className="mx-auto flex min-h-[70svh] max-w-[1200px] flex-col items-center justify-center px-6 py-16 text-center"
     >
       <Reveal>
-        <MetadataRow
-          className="mb-10"
-          items={[
-            { k: "Network", v: manifest?.payment.network ?? "hedera:testnet" },
-            { k: "Scheme", v: "x402 · exact" },
-            { k: "Settlement", v: "sub-second" },
-          ]}
-        />
+        <Pill tone="accent" className="gap-2 px-3 py-1.5">
+          <span className="font-mono text-[10px] tracking-[0.14em] uppercase">x402</span>
+          <span>Pay per job, not per call</span>
+          <span aria-hidden>→</span>
+        </Pill>
       </Reveal>
 
       <Reveal delay={60}>
-        <EditorialHeading as="h1" size="display" className="max-w-[16ch]">
-          Metered work,
-          <br />
-          <span className="text-accent italic">receipted</span> on Hedera.
+        <EditorialHeading as="h1" size="display" className="mt-8 max-w-[19ch]">
+          Work you can pay for. <MonoAccent>Receipted.</MonoAccent>
         </EditorialHeading>
       </Reveal>
 
-      <Reveal delay={130}>
-        <p className="mt-9 max-w-[52ch] text-[15.5px] leading-[1.7] text-ink-soft">
+      <Reveal delay={120}>
+        <p className="mx-auto mt-7 max-w-[56ch] text-[16px] leading-[1.65] text-ink-soft">
           An x402-gated service that sells completed multi-step web work — priced by the work it
-          actually performs, not a flat fee per call. Every job leaves a tamper-evident receipt
-          anyone can check without trusting us.
+          actually performs, with a tamper-evident receipt on Hedera that anyone can check without
+          trusting us.
         </p>
       </Reveal>
 
-      <Reveal delay={200}>
-        <div className="mt-11 flex flex-wrap gap-3">
+      <Reveal delay={180}>
+        <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
           <CTAButton onClick={() => document.getElementById("capabilities")?.scrollIntoView()}>
             Buy a job
             <span aria-hidden className="transition-transform group-hover:translate-x-0.5">
@@ -209,21 +219,21 @@ function Hero({ manifest }: { manifest: Manifest | null }) {
             </span>
           </CTAButton>
           <CTAButton
-            variant="ghost"
+            variant="quiet"
             onClick={() => window.open(manifest?.receipts.explorer ?? "#", "_blank")}
           >
-            Read the receipts
+            <span aria-hidden>◷</span> Read the receipts
           </CTAButton>
         </div>
       </Reveal>
 
-      <Reveal delay={280} className="mt-auto pt-16">
-        <Divider />
+      <Reveal delay={240} className="mt-16 w-full">
         <MetadataRow
-          className="pt-5"
+          className="justify-center"
           items={[
-            { k: "Receipts topic", v: manifest?.receipts.topicId ?? "—" },
-            { k: "Capabilities", v: manifest?.capabilities.length ?? "—" },
+            { k: "Network", v: manifest?.payment.network ?? "hedera:testnet" },
+            { k: "Scheme", v: "exact" },
+            { k: "Topic", v: manifest?.receipts.topicId ?? "—" },
             { k: "Facilitator", v: "Blocky402" },
           ]}
         />
@@ -242,28 +252,36 @@ const STEPS = [
 
 function HowItWorks() {
   return (
-    <section id="how" className="mx-auto max-w-[1180px] px-6 py-24 md:px-10">
-      <Reveal>
-        <SectionLabel n="03">How it works</SectionLabel>
-        <EditorialHeading className="mt-6 max-w-[18ch]">
-          Five steps, none of which ask you to trust the seller.
+    <section id="how" className="mx-auto max-w-[1200px] px-6 py-24">
+      <Reveal className="text-center">
+        <SectionLabel className="justify-center">How it works</SectionLabel>
+        <EditorialHeading className="mx-auto mt-4 max-w-[20ch]">
+          Five steps, none of which ask you to <MonoAccent>trust us.</MonoAccent>
         </EditorialHeading>
       </Reveal>
 
-      <ol className="mt-14 grid gap-px border border-rule bg-rule md:grid-cols-5">
+      <ol className="mt-14 grid gap-4 md:grid-cols-3 lg:grid-cols-5">
         {STEPS.map((s, i) => (
-          <Reveal key={s.n} delay={i * 70}>
-            <li className="group flex h-full flex-col bg-paper-raised p-6 transition-colors hover:bg-paper-deep">
-              <span className="font-mono text-[11px] tracking-[0.14em] text-accent">{s.n}</span>
-              <h3 className="mt-4 font-serif text-[1.35rem] leading-tight">{s.t}</h3>
-              <p className="mt-3 text-[13px] leading-[1.6] text-ink-soft">{s.d}</p>
+          <Reveal key={s.n} delay={i * 60}>
+            <PaperCard dark={i === 4} className="flex h-full flex-col p-5">
               <span
-                aria-hidden
-                className="mt-auto pt-6 font-mono text-ink-faint transition-transform duration-300 group-hover:translate-x-1"
+                className={cx(
+                  "font-mono text-[11px] tracking-[0.14em]",
+                  i === 4 ? "text-ink-invert/60" : "text-ink-faint",
+                )}
               >
-                {i < STEPS.length - 1 ? "→" : "●"}
+                {s.n}
               </span>
-            </li>
+              <h3 className="mt-3 text-[17px] font-semibold tracking-[-0.02em]">{s.t}</h3>
+              <p
+                className={cx(
+                  "mt-2 text-[13px] leading-[1.55]",
+                  i === 4 ? "text-ink-invert/70" : "text-ink-soft",
+                )}
+              >
+                {s.d}
+              </p>
+            </PaperCard>
           </Reveal>
         ))}
       </ol>
@@ -292,24 +310,22 @@ const TRUST = [
 
 function Trust() {
   return (
-    <section id="trust" className="border-y border-rule bg-paper-deep/40">
-      <div className="mx-auto max-w-[1180px] px-6 py-24 md:px-10">
-        <Reveal>
-          <SectionLabel n="06">Verification</SectionLabel>
-          <EditorialHeading className="mt-6 max-w-[20ch]">
-            Four things you can check yourself.
+    <section id="trust" className="border-y border-line bg-surface-sunk/40">
+      <div className="mx-auto max-w-[1200px] px-6 py-24">
+        <Reveal className="text-center">
+          <SectionLabel className="justify-center">Verification</SectionLabel>
+          <EditorialHeading className="mx-auto mt-4 max-w-[22ch]">
+            Four things you can <MonoAccent>check yourself.</MonoAccent>
           </EditorialHeading>
         </Reveal>
 
-        <div className="mt-14 grid gap-px border border-rule bg-rule sm:grid-cols-2">
+        <div className="mt-14 grid gap-4 sm:grid-cols-2">
           {TRUST.map((t, i) => (
-            <Reveal key={t.k} delay={i * 70}>
-              <div className="h-full bg-paper-raised p-7">
-                <h3 className="font-mono text-[11px] uppercase tracking-[0.15em] text-accent">
-                  {t.k}
-                </h3>
-                <p className="mt-4 text-[13.5px] leading-[1.65] text-ink-soft">{t.v}</p>
-              </div>
+            <Reveal key={t.k} delay={i * 60}>
+              <PaperCard className="h-full p-6">
+                <SectionLabel>{t.k}</SectionLabel>
+                <p className="mt-3 text-[13.5px] leading-[1.6] text-ink-soft">{t.v}</p>
+              </PaperCard>
             </Reveal>
           ))}
         </div>
@@ -320,18 +336,18 @@ function Trust() {
 
 function Footer({ manifest, usage }: { manifest: Manifest | null; usage: UsageState }) {
   return (
-    <footer className="mx-auto max-w-[1180px] px-6 py-16 md:px-10">
+    <footer className="mx-auto max-w-[1200px] px-6 py-16">
       <Divider />
       <div className="flex flex-col gap-8 pt-8 md:flex-row md:items-start md:justify-between">
         <div>
-          <p className="font-serif text-[22px] tracking-tight">Ledger of Work</p>
-          <p className="mt-2 max-w-[40ch] text-[12.5px] leading-relaxed text-ink-soft">
+          <p className="text-[17px] font-semibold tracking-[-0.03em]">Ledger of Work</p>
+          <p className="mt-2 max-w-[42ch] text-[13px] leading-relaxed text-ink-soft">
             Proof of what a paid agent delivered. Built for the AI &amp; Agentic Payments on Hedera
             track.
           </p>
         </div>
         <MetadataRow
-          className="md:max-w-[26rem] md:justify-end"
+          className="md:max-w-[28rem] md:justify-end"
           items={[
             { k: "Network", v: manifest?.payment.network ?? "—" },
             { k: "Build", v: "0.1.0" },
@@ -340,7 +356,7 @@ function Footer({ manifest, usage }: { manifest: Manifest | null; usage: UsageSt
               k: "Source",
               v: (
                 <a
-                  className="underline decoration-rule underline-offset-4 hover:decoration-ink"
+                  className="underline decoration-line underline-offset-4 hover:decoration-ink"
                   href="https://github.com/SCARPxVeNOM/ledger-of-work"
                   target="_blank"
                   rel="noopener"
@@ -353,7 +369,7 @@ function Footer({ manifest, usage }: { manifest: Manifest | null; usage: UsageSt
               k: "Receipts",
               v: (
                 <a
-                  className="underline decoration-rule underline-offset-4 hover:decoration-ink"
+                  className="underline decoration-line underline-offset-4 hover:decoration-ink"
                   href={manifest?.receipts.explorer ?? "#"}
                   target="_blank"
                   rel="noopener"
@@ -664,20 +680,20 @@ export default function App() {
 
         {/* ── 01 / 02 — order a job ── */}
         <section id="capabilities" className="mx-auto max-w-[1180px] px-6 py-24 md:px-10">
-          <Reveal>
-            <SectionLabel n="01">Capabilities</SectionLabel>
-            <EditorialHeading className="mt-6 max-w-[19ch]">
-              Pick the work. The price follows it.
+          <Reveal className="text-center">
+            <SectionLabel className="justify-center">Capabilities</SectionLabel>
+            <EditorialHeading className="mx-auto mt-4 max-w-[22ch]">
+              Pick the work. The price <MonoAccent>follows it.</MonoAccent>
             </EditorialHeading>
-            <p className="mt-6 max-w-[54ch] text-[15px] leading-[1.7] text-ink-soft">
-              Each capability publishes its own price book before you buy — a base, a rate per step,
-              per page and per second. A two-step job costs less than a twelve-step one, and you can
-              compute either yourself.
+            <p className="mx-auto mt-5 max-w-[58ch] text-[15px] leading-[1.65] text-ink-soft">
+              Each capability publishes its own price book before you buy — a base, then a rate per
+              step, per page and per second. A two-step job costs less than a twelve-step one, and
+              you can compute either yourself.
             </p>
           </Reveal>
 
           <div className="mt-12 grid gap-8 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
-            <div className="grid gap-px border border-rule bg-rule sm:grid-cols-2">
+            <div className="grid gap-4 sm:grid-cols-2">
               {(manifest?.capabilities ?? []).map((c, i) => (
                 <PaperCard
                   key={c.name}
@@ -686,39 +702,35 @@ export default function App() {
                   selected={c.name === cap}
                   onClick={() => setCap(c.name)}
                   aria-pressed={c.name === cap}
-                  className="group h-full border-0 p-6 text-left"
+                  className="h-full p-5"
                 >
-                  <div className="flex items-baseline justify-between gap-3">
-                    <span className="font-mono text-[11px] tracking-[0.14em] text-accent">
-                      {String(i + 1).padStart(2, "0")}
-                    </span>
-                    <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-faint">
-                      {hostOf(c.site)}
-                    </span>
+                  <div className="flex items-center justify-between gap-3">
+                    <SectionLabel n={String(i + 1).padStart(2, "0")}>{hostOf(c.site)}</SectionLabel>
+                    {c.name === cap && <Pill tone="dark">Selected</Pill>}
                   </div>
-                  <h3 className="mt-4 font-serif text-[1.3rem] leading-tight">
+                  <h3 className="mt-3 font-mono text-[17px] font-medium tracking-[-0.02em]">
                     {c.name.split(".")[1]?.replace(/_/g, " ") ?? c.name}
                   </h3>
-                  <p className="mt-3 line-clamp-3 text-[12.5px] leading-[1.6] text-ink-soft">
+                  <p className="mt-2 line-clamp-3 text-[13px] leading-[1.55] text-ink-soft">
                     {c.description}
                   </p>
-                  <div className="mt-5 flex gap-4 font-mono text-[10px] uppercase tracking-[0.1em] text-ink-faint">
-                    <span>≤{c.limits.maxSteps} steps</span>
-                    <span>≤{c.limits.maxPages} pages</span>
+                  <div className="mt-4 flex items-center gap-2 border-t border-line pt-3">
+                    <Pill>≤{c.limits.maxSteps} steps</Pill>
+                    <Pill>≤{c.limits.maxPages} pages</Pill>
                   </div>
                 </PaperCard>
               ))}
               {!manifest && (
-                <div className="bg-paper-raised p-6 font-mono text-[12px] text-ink-faint sm:col-span-2">
-                  loading the catalogue…
-                </div>
+                <PaperCard className="p-6 sm:col-span-2">
+                  <p className="font-mono text-[12.5px] text-ink-faint">loading the catalogue…</p>
+                </PaperCard>
               )}
             </div>
 
             {/* order panel */}
             <Reveal>
-              <PaperCard className="p-7">
-                <SectionLabel n="02">Order a job</SectionLabel>
+              <PaperCard className="p-6">
+                <SectionLabel>Order a job</SectionLabel>
 
                 <div className="mt-7 space-y-6">
                   {(FIELDS[cap] ?? []).map((f) => (
@@ -744,7 +756,7 @@ export default function App() {
                         id="asset"
                         value={asset}
                         onChange={(e) => setAsset(e.target.value)}
-                        className="mt-2 w-full border-0 border-b border-ink bg-transparent py-2 font-mono text-[13px] focus:border-b-2 focus:outline-none"
+                        className="mt-2 w-full rounded-lg bg-surface-sunk px-3 py-2 font-mono text-[13px] ring-1 ring-line transition focus:ring-ink focus:outline-none"
                       >
                         {manifest?.payment.assets?.map((a) => (
                           <option key={a.asset} value={a.asset}>
@@ -768,29 +780,21 @@ export default function App() {
                 </CTAButton>
 
                 {quote && price && (
-                  <div className="mt-7 border-t border-rule pt-6">
+                  <div className="mt-6 border-t border-line pt-5">
                     <div className="flex items-baseline gap-2">
                       <span
                         data-testid="quote-amount"
-                        className="font-serif text-[2.6rem] leading-none tabular-nums"
+                        className="font-mono text-[2.1rem] leading-none font-medium tracking-[-0.03em] tabular-nums"
                       >
                         {fmt(price.amount)}
                       </span>
-                      <span className="font-mono text-[10px] uppercase tracking-[0.13em] text-ink-soft">
-                        {price.unit}
-                      </span>
+                      <span className="font-mono text-[11px] text-ink-faint">{price.unit}</span>
                     </div>
-                    <p className="mt-2 font-mono text-[11px] text-ink-faint">
-                      {quote.plan.steps} steps · {quote.plan.pages} pages
-                    </p>
-                    <ul className="mt-4 space-y-1.5 text-[12.5px] leading-snug text-ink-soft">
-                      {quote.plan.outline.map((l, i) => (
-                        <li key={i} className="flex gap-2">
-                          <span className="text-ink-faint">·</span>
-                          {l}
-                        </li>
-                      ))}
-                    </ul>
+                    <div className="mt-3 flex gap-2">
+                      <Pill>{quote.plan.steps} steps</Pill>
+                      <Pill>{quote.plan.pages} pages</Pill>
+                    </div>
+                    <PlusList items={quote.plan.outline} />
                     <CTAButton data-testid="btn-run" full className="mt-7" onClick={onRun} disabled={running}>
                       {running ? "Working…" : "Pay and run"}
                     </CTAButton>
@@ -802,7 +806,7 @@ export default function App() {
         </section>
 
         {/* ── 04 — the meter ── */}
-        <section id="meter" className="border-y border-rule bg-paper-deep/40">
+        <section id="meter" className="border-y border-line bg-surface-sunk/40">
           <div className="mx-auto max-w-[1180px] px-6 py-24 md:px-10">
             <Reveal>
               <SectionLabel n="04">Live meter</SectionLabel>
@@ -853,11 +857,11 @@ export default function App() {
                   </p>
                   <p
                     data-testid="receipt-seq"
-                    className="mt-1 font-serif text-[1.7rem] leading-tight"
+                    className="mt-1 font-mono text-[1.6rem] leading-none font-medium tracking-[-0.03em]"
                   >
                     #{run.receipt.sequenceNumber}
                   </p>
-                  <dl className="mt-6 divide-y divide-rule-soft">
+                  <dl className="mt-5 divide-y divide-line">
                     {[
                       { k: "Topic", v: run.receipt.topicId },
                       { k: "Capability", v: quote?.capability ?? "—" },
@@ -938,7 +942,7 @@ export default function App() {
                   </div>
 
                   {checks && (
-                    <div data-testid="checks" className="mt-7 space-y-px border-t border-rule pt-5">
+                    <div data-testid="checks" className="mt-6 space-y-px border-t border-line pt-4">
                       {checks.map((c, i) => (
                         <div
                           key={c.id}
@@ -978,7 +982,7 @@ export default function App() {
           {usage.jobs !== undefined && (
             <Reveal delay={120} className="mt-14">
               <Divider label="On the ledger so far" className="mb-6" />
-              <div className="grid grid-cols-2 gap-px border border-rule bg-rule md:grid-cols-4">
+              <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
                 {[
                   { k: "Jobs", v: fmt(usage.jobs) },
                   {
@@ -988,12 +992,10 @@ export default function App() {
                   { k: "Paying accounts", v: fmt(usage.distinctPayers) },
                   { k: "Steps metered", v: fmt(usage.work?.steps) },
                 ].map((s) => (
-                  <div key={s.k} className="bg-paper-raised p-6">
-                    <p className="font-serif text-[2rem] leading-none tabular-nums">{s.v}</p>
-                    <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.13em] text-ink-faint">
-                      {s.k}
-                    </p>
-                  </div>
+                  <PaperCard key={s.k} className="p-5">
+                    <p className="font-mono text-[1.75rem] leading-none font-medium tracking-[-0.03em] tabular-nums">{s.v}</p>
+                    <p className="mt-2 text-[12.5px] text-ink-soft">{s.k}</p>
+                  </PaperCard>
                 ))}
               </div>
             </Reveal>
@@ -1037,7 +1039,7 @@ function Field({
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="mt-2 w-full border-0 border-b border-rule bg-transparent py-2 font-mono text-[13px] text-ink transition-colors placeholder:text-ink-faint focus:border-ink focus:outline-none"
+        className="mt-2 w-full rounded-lg bg-surface-sunk px-3 py-2 font-mono text-[13px] text-ink ring-1 ring-line transition placeholder:text-ink-faint focus:ring-ink focus:outline-none"
       />
     </div>
   );

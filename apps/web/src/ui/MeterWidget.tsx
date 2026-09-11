@@ -94,27 +94,27 @@ export function MeterWidget({
   }, [lines.length]);
 
   return (
-    <div className="border border-rule bg-paper-raised">
-      <div className="flex items-center justify-between border-b border-rule px-5 py-2.5">
-        <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-ink-faint">
+    <div className="overflow-hidden rounded-[var(--radius-lg)] bg-surface ring-1 ring-line shadow-[var(--shadow-soft)]">
+      <div className="flex items-center justify-between border-b border-line px-5 py-3">
+        <span className="font-mono text-[10.5px] tracking-[0.14em] text-ink-faint uppercase">
           the meter, live
         </span>
-        <span className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.18em]">
+        <span className="flex items-center gap-2 font-mono text-[10.5px] tracking-[0.12em] uppercase">
           <span
             className={cx(
               "inline-block h-1.5 w-1.5 rounded-full",
-              running ? "animate-pulse bg-accent" : "bg-ink-faint",
+              running ? "animate-pulse bg-pass" : "bg-ink-faint",
             )}
             aria-hidden
           />
-          <span className={running ? "text-accent" : "text-ink-faint"}>
+          <span className={running ? "text-pass" : "text-ink-faint"}>
             {running ? "metering" : "idle"}
           </span>
         </span>
       </div>
 
       <div className="grid gap-0 md:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
-        <div className="border-b border-rule px-6 py-7 md:border-r md:border-b-0">
+        <div className="border-b border-line px-6 py-7 md:border-r md:border-b-0">
           <div
             key={pulse}
             data-testid="meter-amount"
@@ -123,17 +123,15 @@ export function MeterWidget({
           >
             {group(shown)}
           </div>
-          <div className="mt-2 font-mono text-[11px] leading-snug uppercase tracking-[0.14em] text-ink-faint">
-            {unit}
-            <br />
-            {caption}
+          <div className="mt-2 font-mono text-[11px] leading-snug tracking-[0.1em] text-ink-faint uppercase">
+            {unit} · {caption}
           </div>
 
           {/* Progress. Indeterminate while running with no plan to measure against —
               a bar that sits at zero reads as broken rather than as unknown. */}
-          <div className="mt-6 h-px w-full bg-rule" aria-hidden>
+          <div className="mt-6 h-1 w-full overflow-hidden rounded-full bg-surface-sunk" aria-hidden>
             <div
-              className={cx("h-px bg-accent transition-all duration-500", running && "opacity-90")}
+              className={cx("h-1 rounded-full bg-ink transition-all duration-500", running && "opacity-80")}
               style={{ width: progress === null ? (running ? "100%" : "0%") : `${progress * 100}%` }}
             />
           </div>
@@ -141,11 +139,7 @@ export function MeterWidget({
 
         <div
           ref={tapeRef}
-          className="max-h-[19rem] min-h-[11rem] overflow-y-auto px-5 py-4"
-          style={{
-            backgroundImage:
-              "repeating-linear-gradient(var(--color-paper-raised) 0 27px, var(--color-rule-soft) 27px 27.5px)",
-          }}
+          className="max-h-[19rem] min-h-[11rem] overflow-y-auto bg-surface-sunk/40 px-5 py-4"
         >
           {lines.length === 0 ? (
             <p className="py-2 font-mono text-[12.5px] text-ink-faint">
