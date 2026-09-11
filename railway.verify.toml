@@ -1,0 +1,18 @@
+# The verifier on Railway.  (Service config: point this service's config file here.)
+#
+# Static files and a 60-line server. No key, no state, no dependency on any other service
+# here — it reads the public Hedera mirror node straight from the visitor's browser, which
+# is what lets a stranger check a receipt without trusting anything we run.
+#
+# Safe to scale: there is nothing to keep in sync.
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile.verify"
+
+[deploy]
+startCommand = "node serve.mjs"
+healthcheckPath = "/"
+healthcheckTimeout = 60
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3

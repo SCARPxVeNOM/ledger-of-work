@@ -32,3 +32,8 @@ resourcelinks.png
 .data/
 apps/verify-page/dist/
 apps/verify-page/dist-types/
+
+# The wallet connector bundle: 3.7MB of Hedera SDK and WalletConnect, rebuilt by
+# `pnpm --filter @low/web build` and by Dockerfile.web. Committing it would put a
+# generated blob in every diff and let the shipped bundle drift from the lockfile.
+apps/web/public/connect.js

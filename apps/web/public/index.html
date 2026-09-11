@@ -8,6 +8,9 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
 <style>
+.linkish { background: none; border: 0; padding: 0 0 0 8px; font: inherit; font-size: 12px;
+  color: var(--blue); text-decoration: underline; cursor: pointer; }
+.linkish:disabled { opacity: .5; cursor: default; text-decoration: none; }
 :root {
   --paper:      #f2eee3;
   --paper-deep: #e7e0cf;
@@ -336,7 +339,9 @@ footer {
     <span>Receipts topic <b><a id="m-topic" target="_blank" rel="noopener">—</a></b></span>
     <span>Facilitator <b id="m-fac">—</b></span>
     <span id="m-card-wrap" hidden>Agent card <b><a id="m-card" target="_blank" rel="noopener">—</a></b></span>
-    <span>Wallet <b id="m-wallet">checking…</b></span>
+    <span>Wallet <b id="m-wallet">checking…</b>
+      <button type="button" id="btn-connect" class="linkish">connect your own</button>
+    </span>
   </div>
 </header>
 
@@ -441,6 +446,12 @@ footer {
 
 <script type="module">
 const $ = (id) => document.getElementById(id);
+
+// Declared up here rather than beside the wallet code below, because the page's init
+// runs before that point and `let` has no hoisted value — reading it early is a
+// ReferenceError, not an undefined.
+let demoWallet = null;
+let connected = null;   // { accountId, disconnect } once a real wallet is attached
 const fmt = (n) => Number(n).toLocaleString("en-US");
 
 let manifest = null;
@@ -477,17 +488,21 @@ async function boot() {
     $("m-card").href = manifest.agentCard.explorer;
   }
 
-  // The buyer's key lives in a separate wallet process. Say so, and say plainly when it
-  // is absent — "payment failed" at the moment of paying is a worse way to find out.
+  // Two ways to pay, and the page should be honest about which is in force.
+  //
+  // The demo wallet is a separate process holding a small, policy-capped testnet key —
+  // convenient, and not the visitor's money. Connecting your own wallet is the real
+  // shape of this: the key stays on your phone and this page never sees it.
   try {
     const w = await fetch("/api/wallet").then((r) => r.json());
-    $("m-wallet").textContent = w.connected ? `${w.accountId} (own process)` : "not running";
-    $("m-wallet").style.color = w.connected ? "" : "var(--red)";
+    demoWallet = w.connected ? w.accountId : null;
+    renderWallet();
     if (!w.connected) {
-      $("err").textContent = `No wallet at ${w.url}. Start it with \`pnpm wallet\` — this page holds no keys and cannot pay without it.`;
+      $("err").textContent = `No demo wallet at ${w.url}. Connect your own wallet to pay, or start one with \`pnpm wallet\` — this page holds no keys either way.`;
     }
   } catch {
-    $("m-wallet").textContent = "unknown";
+    demoWallet = null;
+    renderWallet();
   }
 
   loadUsage();
@@ -605,6 +620,89 @@ $("btn-quote").onclick = async () => {
   }
 };
 
+// ── wallets ─────────────────────────────────────────────────────
+//
+// Two ways to pay, and they are not equivalent. The demo wallet is ours: a policy-capped
+// testnet key in its own process, there so a visitor can see the whole flow without
+// owning anything. Connecting your own wallet is what this actually is — the key stays
+// on your phone, this page never sees it, and the account that pays is yours.
+function renderWallet() {
+  const el = $("m-wallet");
+  const btn = $("btn-connect");
+  if (connected) {
+    el.textContent = `${connected.accountId} (yours)`;
+    el.style.color = "var(--green)";
+    btn.textContent = "disconnect";
+  } else if (demoWallet) {
+    el.textContent = `${demoWallet} (demo)`;
+    el.style.color = "";
+    btn.textContent = "connect your own";
+  } else {
+    el.textContent = "none";
+    el.style.color = "var(--red)";
+    btn.textContent = "connect a wallet";
+  }
+  btn.disabled = false;
+}
+
+$("btn-connect").onclick = async () => {
+  const btn = $("btn-connect");
+  $("err").textContent = "";
+  if (connected) {
+    await connected.disconnect();
+    connected = null;
+    renderWallet();
+    return;
+  }
+  btn.disabled = true;
+  btn.textContent = "opening…";
+  try {
+    // Loaded on click, not on page load. The connector carries the Hedera SDK and
+    // WalletConnect with it — several megabytes — and nobody who only wants to read a
+    // receipt should pay to download a wallet stack they will not use.
+    const mod = await import("./connect.js");
+    connected = await mod.connectWallet();
+  } catch (e) {
+    $("err").textContent = `Could not connect: ${e.message}`;
+  } finally {
+    renderWallet();
+  }
+};
+
+/**
+ * Pay for a job, however the visitor is set up.
+ *
+ * Returns the seller's response. The two paths differ only in where the signature comes
+ * from: one round trip through our own process, or two round trips around a human
+ * tapping approve on their phone.
+ */
+async function payAndRun(runUrl) {
+  if (!connected) {
+    return fetch("/api/run", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ runUrl }),
+    });
+  }
+
+  const prep = await fetch("/api/pay/prepare", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ runUrl, buyerAccountId: connected.accountId }),
+  });
+  const p = await prep.json();
+  if (!prep.ok) throw new Error(p.error ?? "could not prepare the payment");
+
+  const mod = await import("./connect.js");
+  const signed = await mod.signPayment(connected.accountId, p.unsigned);
+
+  return fetch("/api/pay/complete", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ payId: p.payId, signed }),
+  });
+}
+
 // ── 2. pay, run, watch the real meter ───────────────────────────
 $("btn-run").onclick = async () => {
   if (!quote) return;
@@ -625,11 +723,7 @@ $("btn-run").onclick = async () => {
   // The seller streams the same counter that produces the price. Subscribing before the
   // POST would race the job's creation of the stream; the stream replays its history to
   // a late subscriber for exactly this reason.
-  const runPromise = fetch("/api/run", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ runUrl: quote.run }),
-  });
+  const runPromise = payAndRun(quote.run);
 
   const es = new EventSource(quote.events);
   es.onmessage = (ev) => {

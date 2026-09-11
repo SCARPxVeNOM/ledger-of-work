@@ -1,0 +1,33 @@
+# The demo UI and the demo wallet.
+#
+# A plain Node base, not Playwright's. This process never opens a browser — it imports
+# @low/worker only for the published price books, and the price-book module is split out
+# from the adapters precisely so that reading prices does not drag in a browser driver.
+# That split saves about 1.8 GB here.
+FROM node:22-slim
+
+WORKDIR /app
+ENV NODE_ENV=production CI=1
+
+RUN corepack enable
+COPY pnpm-workspace.yaml pnpm-lock.yaml package.json tsconfig*.json ./
+COPY packages ./packages
+COPY apps ./apps
+
+# See the note in the seller's Dockerfile: `tsx` starts this and is a devDependency.
+# Playwright is a dependency of @low/worker and installs fine here; it is never launched,
+# and PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD keeps ~400 MB of browsers out of the image.
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+RUN pnpm install --frozen-lockfile --prod=false
+
+# The wallet connector bundle. Built here rather than committed, so the version of the
+# connector that ships is the one the lockfile pins.
+RUN pnpm --filter @low/web exec node build.mjs
+
+ENV WEB_PORT=8403
+EXPOSE 8403
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s \
+  CMD node -e "fetch('http://127.0.0.1:'+(process.env.WEB_PORT||8403)+'/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+
+CMD ["pnpm", "web"]

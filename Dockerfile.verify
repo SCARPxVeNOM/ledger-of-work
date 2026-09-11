@@ -1,0 +1,25 @@
+# The verifier, as a static page.
+#
+# Two stages so the thing that ships is a folder of files and a server small enough to
+# read in one sitting. Nothing here holds a key, talks to the seller, or needs the
+# network at build time beyond npm — which is the whole claim the page makes about
+# itself, and it should be true of how it is served too.
+FROM node:22-slim AS build
+WORKDIR /app
+ENV CI=1 PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+RUN corepack enable
+COPY pnpm-workspace.yaml pnpm-lock.yaml package.json tsconfig*.json ./
+COPY packages ./packages
+COPY apps ./apps
+RUN pnpm install --frozen-lockfile --prod=false
+RUN pnpm --filter @low/verify-page build
+
+FROM node:22-slim
+WORKDIR /app
+ENV NODE_ENV=production VERIFY_PORT=8405
+COPY --from=build /app/apps/verify-page/dist ./dist
+COPY apps/verify-page/serve.mjs ./serve.mjs
+EXPOSE 8405
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \
+  CMD node -e "fetch('http://127.0.0.1:'+(process.env.VERIFY_PORT||8405)+'/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+CMD ["node", "serve.mjs"]

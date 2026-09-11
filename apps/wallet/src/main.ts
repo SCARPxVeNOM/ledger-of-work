@@ -25,6 +25,21 @@ import { DEFAULT_POLICY, SpendLedger, checkPolicy, type SpendPolicy } from "./po
 const PORT = Number(process.env.WALLET_PORT ?? 8404);
 const TOKEN = process.env.WALLET_TOKEN;
 
+/**
+ * What this binds to. Loopback unless someone deliberately says otherwise.
+ *
+ * The one legitimate reason to widen it is a *demo* wallet on a private network — a
+ * throwaway testnet key, capped by the policy below, reachable only by the demo UI over a
+ * platform's internal networking and never given a public address. That is a real
+ * deployment and the default should not make it impossible.
+ *
+ * It should make it deliberate, though, which is why this is an environment variable with
+ * a safe default rather than a host that was always configurable and easy to miss. A
+ * wallet on 0.0.0.0 with a public route is a key anyone can spend, and the shared secret
+ * and spend policy bound the damage rather than preventing it.
+ */
+const BIND = process.env.WALLET_BIND ?? "127.0.0.1";
+
 function required(name: string): string {
   const v = process.env[name];
   if (!v) throw new Error(`missing ${name} in .env`);
@@ -121,8 +136,13 @@ const server = createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, "127.0.0.1", () => {
-  console.log(`wallet    http://127.0.0.1:${PORT}  (loopback only)`);
+server.listen(PORT, BIND, () => {
+  console.log(`wallet    http://${BIND}:${PORT}  ${BIND === "127.0.0.1" ? "(loopback only)" : "(REACHABLE OFF-HOST)"}`);
+  if (BIND !== "127.0.0.1") {
+    console.log(`  WALLET_BIND is ${BIND}, so this is not loopback-only.`);
+    console.log(`  Only correct for a capped demo key on a private network. Never give it`);
+    console.log(`  a public route, and never point it at a key you would miss.`);
+  }
   console.log(`  account ${accountId} on ${network}`);
   console.log(`  policy  max ${policy.maxPerPayment}/payment, ${policy.maxTotal} total`);
   if (policy.allowedAssets.length) console.log(`          assets ${policy.allowedAssets.join(", ")}`);

@@ -1,0 +1,40 @@
+# The demo wallet on Railway.  (Service config: point this service's config file here.)
+#
+# ── Read this before deploying it ───────────────────────────────────────────────
+# This service holds a private key. Everywhere else in this repo says not to host one,
+# and that advice stands for any key you would miss. It exists so a visitor can watch a
+# real payment settle without owning a testnet account, and it is only defensible under
+# all of the following:
+#
+#   1. A throwaway **testnet** account, funded with an amount you would shrug at.
+#   2. **No public domain.** Railway gives a service a public route only when asked.
+#      Do not ask. The UI reaches this over the private network at
+#      `wallet.railway.internal`, which is why WALLET_BIND has to be widened — and why
+#      widening it is not the same as exposing it.
+#   3. `WALLET_TOKEN` set, and the same value given to the web service.
+#   4. The spend policy set tight. It is the actual limit on what a stranger clicking Buy
+#      in a loop can cost you, and the caller cannot raise it.
+#
+# Variables to set, beyond the account and key:
+#   WALLET_BIND=0.0.0.0                 required, or the UI cannot reach it
+#   WALLET_TOKEN=<shared secret>        must match the web service
+#   WALLET_MAX_PER_PAYMENT=2000000      ~0.02 HBAR per job
+#   WALLET_MAX_TOTAL=40000000           the whole budget a stranger can spend
+#   WALLET_ALLOWED_RECIPIENTS=<seller>  so it can only ever pay our own seller
+#   WALLET_ALLOWED_ASSETS=0.0.0         HBAR only
+#
+# If any of that reads as too much trouble, the right answer is not to run this service.
+# The UI works without it; visitors connect their own wallet instead, which is the more
+# honest demonstration anyway.
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile.web"
+
+[deploy]
+startCommand = "pnpm wallet"
+healthcheckPath = "/health"
+healthcheckTimeout = 60
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3
+numReplicas = 1

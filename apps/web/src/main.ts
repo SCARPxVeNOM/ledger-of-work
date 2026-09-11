@@ -3,7 +3,12 @@ import { readFileSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { PaymentRequirements } from "@low/buyer-cli";
+import { randomUUID } from "node:crypto";
+import {
+  buildUnsignedPayment,
+  payloadFromSignedBytes,
+  type PaymentRequirements,
+} from "@low/buyer-cli";
 import { readUsage, verifyFromMirror } from "@low/receipts";
 import { CATALOGUE } from "@low/worker";
 
@@ -26,6 +31,31 @@ const SELLER = process.env.SELLER_URL ?? "http://localhost:8402";
 const PORT = Number(process.env.WEB_PORT ?? 8403);
 const WALLET = process.env.WALLET_URL ?? "http://127.0.0.1:8404";
 const WALLET_TOKEN = process.env.WALLET_TOKEN;
+
+/**
+ * Payments waiting for a wallet signature.
+ *
+ * The 402 challenge is fetched here and kept here. The browser gets an opaque id and the
+ * bytes to sign, never the requirements themselves — otherwise `complete` would have to
+ * trust a client-supplied description of what is being paid, which turns this server into
+ * a relay that will wrap whatever it is handed.
+ *
+ * In memory and short-lived on purpose: a pending signature is worth nothing once the
+ * quote behind it has expired, and surviving a restart is not a property worth having
+ * for something the user is actively looking at.
+ */
+interface Pending {
+  runUrl: string;
+  requirements: PaymentRequirements;
+  expiresAt: number;
+}
+const pending = new Map<string, Pending>();
+const PENDING_TTL_MS = 5 * 60_000;
+
+function reapPending(): void {
+  const now = Date.now();
+  for (const [id, p] of pending) if (p.expiresAt < now) pending.delete(id);
+}
 
 /** Ask the buyer's wallet to sign. The key never enters this process. */
 async function signWithWallet(requirements: PaymentRequirements): Promise<string> {
@@ -74,6 +104,32 @@ function send(res: ServerResponse, status: number, body: unknown): void {
   res.end(JSON.stringify(body));
 }
 
+/**
+ * Fetch the 402 and return what it asks for.
+ *
+ * A response that is not a 402 is a bug worth surfacing rather than retrying: it means
+ * the seller let the job through unpaid, or refused it for a reason the buyer should see.
+ */
+async function challenge(
+  runUrl: string,
+): Promise<{ accepts: PaymentRequirements } | { error: string; status: number }> {
+  if (!runUrl?.startsWith(SELLER)) {
+    return { error: "run url must belong to the configured seller", status: 400 };
+  }
+  const res = await fetch(runUrl, { method: "POST" });
+  if (res.status !== 402) return { error: `expected 402, got ${res.status}`, status: 502 };
+  const { accepts } = (await res.json()) as { accepts: PaymentRequirements[] };
+  const first = accepts?.[0];
+  if (!first) return { error: "the 402 named no acceptable payment", status: 502 };
+  return { accepts: first };
+}
+
+/** Re-run the job with the signed payment attached. */
+async function settle(res: ServerResponse, runUrl: string, header: string): Promise<void> {
+  const paid = await fetch(runUrl, { method: "POST", headers: { "payment-signature": header } });
+  return send(res, paid.status, await paid.json());
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url ?? "/", `http://localhost:${PORT}`);
   const path = url.pathname;
@@ -83,6 +139,25 @@ const server = createServer(async (req, res) => {
       const html = readFileSync(join(HERE, "..", "public", "index.html"), "utf8");
       res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
       res.end(html);
+      return;
+    }
+
+    // The wallet connector bundle. Requested only when someone clicks connect, so a
+    // missing build degrades that one button rather than blanking the page — worth
+    // saying out loud in the response instead of returning a bare 404 that surfaces as
+    // an unexplained import failure in the console.
+    if (path === "/connect.js") {
+      try {
+        const js = readFileSync(join(HERE, "..", "public", "connect.js"));
+        res.writeHead(200, {
+          "content-type": "text/javascript; charset=utf-8",
+          "cache-control": "public, max-age=3600",
+        });
+        res.end(js);
+      } catch {
+        res.writeHead(503, { "content-type": "text/javascript; charset=utf-8" });
+        res.end(`throw new Error("connect.js was not built — run \`pnpm --filter @low/web build\`");`);
+      }
       return;
     }
 
@@ -133,20 +208,68 @@ const server = createServer(async (req, res) => {
     // seller's SSE stream in parallel for the live meter.
     if (path === "/api/run" && req.method === "POST") {
       const { runUrl } = (await readJson(req)) as { runUrl: string };
-      if (!runUrl?.startsWith(SELLER)) {
-        return send(res, 400, { error: "run url must belong to the configured seller" });
+      const requirements = await challenge(runUrl);
+      if ("error" in requirements) return send(res, requirements.status, { error: requirements.error });
+
+      const header = await signWithWallet(requirements.accepts);
+      return settle(res, runUrl, header);
+    }
+
+    // ── Paying from the visitor's own wallet ──────────────────────────────────
+    //
+    // Split in two because a wallet signature happens on someone's phone, which is a
+    // human-scale pause in the middle of an HTTP request. `prepare` gets the challenge
+    // and the bytes; `complete` takes the signature back.
+    //
+    // The buyer's account id comes from the connected wallet, and it has to: the payment
+    // transfers from *that* account, so building the transaction against any other would
+    // produce a signature the facilitator rejects.
+    if (path === "/api/pay/prepare" && req.method === "POST") {
+      const { runUrl, buyerAccountId } = (await readJson(req)) as {
+        runUrl: string;
+        buyerAccountId: string;
+      };
+      if (!/^\d+\.\d+\.\d+$/.test(buyerAccountId ?? "")) {
+        return send(res, 400, { error: "buyerAccountId must be a Hedera account id" });
       }
 
-      const challenge = await fetch(runUrl, { method: "POST" });
-      if (challenge.status !== 402) {
-        return send(res, 502, { error: `expected 402, got ${challenge.status}` });
+      const got = await challenge(runUrl);
+      if ("error" in got) return send(res, got.status, { error: got.error });
+
+      const unsigned = buildUnsignedPayment(got.accepts, buyerAccountId);
+
+      reapPending();
+      const payId = randomUUID();
+      pending.set(payId, {
+        runUrl,
+        requirements: got.accepts,
+        expiresAt: Date.now() + PENDING_TTL_MS,
+      });
+
+      return send(res, 200, {
+        payId,
+        unsigned: Buffer.from(unsigned.bytes).toString("base64"),
+        transactionId: unsigned.transactionId,
+        amount: got.accepts.amount,
+        payTo: got.accepts.payTo,
+        asset: got.accepts.asset,
+      });
+    }
+
+    if (path === "/api/pay/complete" && req.method === "POST") {
+      const { payId, signed } = (await readJson(req)) as { payId: string; signed: string };
+      reapPending();
+      const p = pending.get(payId);
+      if (!p) {
+        return send(res, 410, {
+          error: "that payment is no longer pending — it expired or was already used",
+        });
       }
-      const { accepts } = (await challenge.json()) as { accepts: PaymentRequirements[] };
+      // One signature per prepare. A replayed id cannot be used to submit twice.
+      pending.delete(payId);
 
-      const header = await signWithWallet(accepts[0] as PaymentRequirements);
-
-      const paid = await fetch(runUrl, { method: "POST", headers: { "payment-signature": header } });
-      return send(res, paid.status, await paid.json());
+      const header = payloadFromSignedBytes(p.requirements, Buffer.from(signed, "base64"));
+      return settle(res, p.runUrl, header);
     }
 
     // Step 3: verify. Same code the CLI runs, against the same public mirror node.

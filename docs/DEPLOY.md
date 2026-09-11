@@ -1,7 +1,17 @@
 # Deploying
 
-Two things can be hosted, and they have very different requirements. The verifier is the
-one worth hosting first.
+Four things can be hosted and they want opposite things from a host, so they are four
+services rather than one. The verifier is the one worth hosting first.
+
+| Service | Config | Holds a key | Public route |
+| --- | --- | --- | --- |
+| verifier | `railway.verify.toml` / `vercel.json` | no | yes |
+| seller | `railway.toml` | the seller's | yes |
+| demo UI | `railway.web.toml` | no | yes |
+| demo wallet | `railway.wallet.toml` | **a funded one** | **no** |
+
+On Railway each service points at its own config file — set it per service under
+**Settings → Config-as-code**. One repo, four services, one deploy each.
 
 ## 1. The verifier — static, free, no secrets
 
@@ -136,6 +146,38 @@ healthy container as dead and look exactly like a crash loop.
 **Do not host the wallet.** `apps/wallet` holds a private key and binds to loopback for
 that reason. It belongs on the buyer's machine, not on a server. Its spend policy limits
 the damage if it is ever reached, but the correct exposure is none.
+
+## 3. The demo UI — no key, two ways to pay
+
+`railway.web.toml`, built from `Dockerfile.web`. A plain Node image rather than the
+seller's: this process never opens a browser, so it is about 200 MB instead of 2 GB.
+
+It holds no key either way. A visitor pays by one of two routes:
+
+**Their own wallet, over WalletConnect.** The page loads a connector bundle on click,
+the wallet signs on their phone, and this server only ever handles bytes that are already
+signed. This is the honest version of the demo and needs nothing hosted.
+
+**The demo wallet**, if you run one. See below, and read it before you do.
+
+Set `SELLER_URL` to the seller service's internal address
+(`http://seller.railway.internal:8402`) so the two talk over the private network rather
+than back out through the internet.
+
+## 4. The demo wallet — optional, and the one to think about
+
+`railway.wallet.toml` holds the warnings in full; the short version is that it is a
+private key on a server, which every other page here tells you not to do. It is
+defensible only as a throwaway testnet account, with **no public route**, a shared
+secret, and a tight spend policy — the policy being the actual limit on what a stranger
+clicking Buy in a loop can cost you.
+
+`WALLET_BIND=0.0.0.0` is required for the UI to reach it and is refused by default. That
+is deliberate: widening the bind is a decision, not a configuration detail.
+
+**The UI works without it.** Visitors connect their own wallet instead, which demonstrates
+the same thing and puts no key of yours on the internet. Skipping this service is the
+recommended choice.
 
 ## What hosting unlocks
 
