@@ -1,8 +1,11 @@
 /**
  * Deploy the whole thing to Railway in one command.
  *
- *   node scripts/deploy-railway.mjs
- *   node scripts/deploy-railway.mjs --dry-run    # print every change, make none
+ *   pnpm deploy:railway
+ *   pnpm deploy:railway -- --dry-run    # print every change, make none
+ *
+ * Not `pnpm deploy`: pnpm reserves that name for its own workspace-deploy command, which
+ * shadows anything of that name in package.json and fails with ERR_PNPM_NOTHING_TO_DEPLOY.
  *
  * Safe to run repeatedly. Every step checks whether it has already been done, so a
  * re-run after a failure picks up where it stopped rather than creating a second copy
@@ -235,10 +238,30 @@ let status = null;
 try {
   status = JSON.parse(railway(["status", "--json"], { quiet: true }));
 } catch {
-  /* not linked yet */
+  /* not linked in this directory yet */
 }
+
+// The CLI links a project *per directory*, and that link does not survive a fresh
+// `railway login` — nor does it follow you from one shell to another if the paths differ
+// in case. Both look identical from here: "No linked project found". So if the project
+// already exists on the account, link to it rather than telling someone to go and do it.
+if (!status?.name) {
+  const known = railway(["list"], { quiet: true });
+  if (known.includes(PROJECT)) {
+    info(`not linked here — linking to the existing "${PROJECT}"`);
+    railway(["link", "-p", PROJECT, "-e", "production"], { quiet: true, mutates: true });
+    if (!DRY) {
+      try {
+        status = JSON.parse(railway(["status", "--json"], { quiet: true }));
+      } catch {
+        die(`could not link to "${PROJECT}". Run: railway link -p ${PROJECT}`);
+      }
+    }
+  }
+}
+
 if (status?.name) {
-  ok(`already linked to "${status.name}"`);
+  ok(`linked to "${status.name}"`);
 } else {
   info(`creating "${PROJECT}"`);
   try {

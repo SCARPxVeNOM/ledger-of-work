@@ -16,9 +16,15 @@ On Railway each service points at its own config file — set it per service und
 ## The short version
 
 ```bash
-pnpm deploy                              # the whole thing
-node scripts/deploy-railway.mjs --dry-run  # print every change, make none
+pnpm deploy:railway                  # the whole thing
+pnpm deploy:railway -- --dry-run     # print every change, make none
 ```
+
+Not `pnpm deploy`: pnpm reserves that name for its own workspace-deploy command, which
+shadows a script of the same name and fails with `ERR_PNPM_NOTHING_TO_DEPLOY`.
+
+It links the project itself if the current directory is not linked — the Railway CLI
+links per directory, and that link does not survive a fresh `railway login`.
 
 Creates the project, the three services and the seller's volume, sets every variable
 from your `.env`, deploys, assigns domains, and waits for each to answer. Safe to re-run:
