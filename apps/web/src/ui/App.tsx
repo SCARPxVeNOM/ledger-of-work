@@ -15,7 +15,7 @@ import {
 } from "./primitives.js";
 import { MeterWidget, type MeterLine } from "./MeterWidget.js";
 import { AgentBar } from "./AgentBar.js";
-import { HeroCollage } from "./HeroCards.js";
+import { Art, FloatingArt } from "./Art.js";
 import { BorderBeam, Marquee, NumberTicker } from "./magicui.js";
 
 /* ─────────────────────────────────────────────────────────────────────────────
@@ -121,6 +121,7 @@ const NAV = [
   { href: "#meter", label: "Meter" },
   { href: "#receipts", label: "Receipts" },
   { href: "#trust", label: "Verification" },
+  { href: "#paper", label: "Write-up" },
 ];
 
 function Nav({ wallet, onConnect, busy }: { wallet: string; onConnect: () => void; busy: boolean }) {
@@ -189,60 +190,66 @@ function Hero({ manifest }: { manifest: Manifest | null }) {
   return (
     <section
       id="top"
-      className="relative mx-auto flex min-h-[76svh] max-w-[1320px] flex-col items-center justify-center px-6 py-16 text-center"
+      className="mx-auto grid max-w-[1240px] items-center gap-12 px-6 py-16 lg:min-h-[80svh] lg:grid-cols-[minmax(0,1fr)_minmax(0,0.86fr)] lg:gap-8 lg:py-20"
     >
-      <HeroCollage />
+      <div className="text-center lg:text-left">
+        <Reveal>
+          <Pill tone="accent" className="gap-2 px-3 py-1.5">
+            <span className="font-mono text-[10px] tracking-[0.14em] uppercase">x402</span>
+            <span>Pay per job, not per call</span>
+            <span aria-hidden>→</span>
+          </Pill>
+        </Reveal>
 
-      <Reveal>
-        <Pill tone="accent" className="gap-2 px-3 py-1.5">
-          <span className="font-mono text-[10px] tracking-[0.14em] uppercase">x402</span>
-          <span>Pay per job, not per call</span>
-          <span aria-hidden>→</span>
-        </Pill>
-      </Reveal>
+        <Reveal delay={60}>
+          <EditorialHeading as="h1" size="display" className="mt-7 max-w-[15ch]">
+            Work you can pay for. <MonoAccent>Receipted.</MonoAccent>
+          </EditorialHeading>
+        </Reveal>
 
-      <Reveal delay={60}>
-        <EditorialHeading as="h1" size="display" className="mt-8 max-w-[19ch]">
-          Work you can pay for. <MonoAccent>Receipted.</MonoAccent>
-        </EditorialHeading>
-      </Reveal>
+        <Reveal delay={120}>
+          <p className="mx-auto mt-6 max-w-[52ch] text-[16px] leading-[1.65] text-ink-soft lg:mx-0">
+            An x402-gated service that sells completed multi-step web work — priced by the work it
+            actually performs, with a tamper-evident receipt on Hedera that anyone can check
+            without trusting us.
+          </p>
+        </Reveal>
 
-      <Reveal delay={120}>
-        <p className="mx-auto mt-7 max-w-[56ch] text-[16px] leading-[1.65] text-ink-soft">
-          An x402-gated service that sells completed multi-step web work — priced by the work it
-          actually performs, with a tamper-evident receipt on Hedera that anyone can check without
-          trusting us.
-        </p>
-      </Reveal>
+        <Reveal delay={180}>
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-3 lg:justify-start">
+            <CTAButton onClick={() => document.getElementById("capabilities")?.scrollIntoView()}>
+              Buy a job
+              <span aria-hidden className="transition-transform group-hover:translate-x-0.5">
+                →
+              </span>
+            </CTAButton>
+            <CTAButton
+              variant="quiet"
+              onClick={() => window.open(manifest?.receipts.explorer ?? "#", "_blank")}
+            >
+              <span aria-hidden>◷</span> Read the receipts
+            </CTAButton>
+          </div>
+        </Reveal>
 
-      <Reveal delay={180}>
-        <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
-          <CTAButton onClick={() => document.getElementById("capabilities")?.scrollIntoView()}>
-            Buy a job
-            <span aria-hidden className="transition-transform group-hover:translate-x-0.5">
-              →
-            </span>
-          </CTAButton>
-          <CTAButton
-            variant="quiet"
-            onClick={() => window.open(manifest?.receipts.explorer ?? "#", "_blank")}
-          >
-            <span aria-hidden>◷</span> Read the receipts
-          </CTAButton>
-        </div>
-      </Reveal>
+        <Reveal delay={240} className="mt-12">
+          <MetadataRow
+            className="justify-center lg:justify-start"
+            items={[
+              { k: "Network", v: manifest?.payment.network ?? "hedera:testnet" },
+              { k: "Scheme", v: "exact" },
+              { k: "Topic", v: manifest?.receipts.topicId ?? "—" },
+            ]}
+          />
+        </Reveal>
+      </div>
 
-      <Reveal delay={240} className="mt-16 w-full">
-        <MetadataRow
-          className="justify-center"
-          items={[
-            { k: "Network", v: manifest?.payment.network ?? "hedera:testnet" },
-            { k: "Scheme", v: "exact" },
-            { k: "Topic", v: manifest?.receipts.topicId ?? "—" },
-            { k: "Facilitator", v: "Blocky402" },
-          ]}
-        />
-      </Reveal>
+      {/* The collage: a receipt, the checks it passes, the consensus it is written to, and
+          the page it came from. Everything the product does, in one picture — and each of
+          them exists live further down, which is why this one is decorative. */}
+      <FloatingArt rotate={-3} delay={0.25} drift={14} className="mx-auto w-full max-w-[560px]">
+        <Art name="collage" sizes="(max-width: 1024px) 80vw, 46vw" priority />
+      </FloatingArt>
     </section>
   );
 }
@@ -290,6 +297,16 @@ function HowItWorks() {
           </Reveal>
         ))}
       </ol>
+
+      <Reveal delay={120} className="mt-16">
+        <FloatingArt rotate={1.5} delay={0.1} drift={9} className="mx-auto max-w-[760px]">
+          <Art
+            name="decision"
+            sizes="(max-width: 768px) 92vw, 760px"
+            alt="A scale review card: a decision about when a job queue becomes the bottleneck, with load, p99 and budget figures beside it."
+          />
+        </FloatingArt>
+      </Reveal>
     </section>
   );
 }
@@ -832,6 +849,14 @@ export default function App() {
                 the worker actually performed, priced as it happened.
               </p>
             </Reveal>
+
+            {/* The idea, then the instrument. This is an illustration; the panel below it
+                is the live thing, and the difference is the point of the section. */}
+            <Reveal delay={60} className="mt-12">
+              <FloatingArt rotate={-2} delay={0.1} drift={10} className="mx-auto max-w-[720px]">
+                <Art name="livejob" sizes="(max-width: 768px) 92vw, 720px" />
+              </FloatingArt>
+            </Reveal>
             <Reveal delay={80} className="mt-12">
               <div className="relative pb-8">
                 <MeterWidget
@@ -1057,6 +1082,55 @@ export default function App() {
 
         <HowItWorks />
         <Trust />
+
+        {/* The written argument, for a reader who wants the reasoning rather than the demo.
+            The image is the cover; the link goes to the thing itself. */}
+        <section id="paper" className="mx-auto max-w-[1200px] px-6 py-24">
+          <div className="grid items-center gap-12 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1fr)]">
+            <Reveal>
+              <FloatingArt rotate={-2.5} delay={0.1} drift={10} className="mx-auto max-w-[440px]">
+                <Art
+                  name="paper"
+                  sizes="(max-width: 1024px) 76vw, 440px"
+                  alt="Cover of the Ledger of Work write-up: verifiable work for the agent economy."
+                />
+              </FloatingArt>
+            </Reveal>
+
+            <Reveal delay={80}>
+              <SectionLabel>The write-up</SectionLabel>
+              <EditorialHeading className="mt-4 max-w-[18ch]">
+                Why any of this <MonoAccent>needs proving.</MonoAccent>
+              </EditorialHeading>
+              <p className="mt-5 max-w-[52ch] text-[15px] leading-[1.65] text-ink-soft">
+                The README is the long version: what the receipt proves and what it does not, why
+                the price is metered rather than flat, how a zkTLS attestor gets a third party to
+                vouch for the answer, and the measurements behind every claim — including the ones
+                that came out badly.
+              </p>
+              <div className="mt-7 flex flex-wrap gap-3">
+                <CTAButton
+                  onClick={() =>
+                    window.open("https://github.com/SCARPxVeNOM/ledger-of-work#readme", "_blank")
+                  }
+                >
+                  Read it
+                  <span aria-hidden className="transition-transform group-hover:translate-x-0.5">
+                    →
+                  </span>
+                </CTAButton>
+                <CTAButton
+                  variant="ghost"
+                  onClick={() =>
+                    window.open("https://github.com/SCARPxVeNOM/ledger-of-work", "_blank")
+                  }
+                >
+                  Source
+                </CTAButton>
+              </div>
+            </Reveal>
+          </div>
+        </section>
       </main>
 
       <Footer manifest={manifest} usage={usage} />

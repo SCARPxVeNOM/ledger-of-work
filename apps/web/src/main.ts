@@ -152,7 +152,8 @@ const server = createServer(async (req, res) => {
       path === "/fonts.css" ||
       path === "/app.css" ||
       path === "/app.js" ||
-      /^\/fonts\/[\w.-]+\.(woff2|txt)$/.test(path)
+      /^\/fonts\/[\w.-]+\.(woff2|txt)$/.test(path) ||
+      /^\/art\/[\w.-]+\.webp$/.test(path)
     ) {
       try {
         const file = readFileSync(join(HERE, "..", "public", path.replace(/^\//, "")));
@@ -162,12 +163,17 @@ const server = createServer(async (req, res) => {
             ? "text/javascript; charset=utf-8"
             : path.endsWith(".woff2")
               ? "font/woff2"
-              : "text/plain; charset=utf-8";
+              : path.endsWith(".webp")
+                ? "image/webp"
+                : "text/plain; charset=utf-8";
         // The bundles are rebuilt on every deploy and share a name, so they must not be
         // cached for a year the way the content-addressed fonts can be.
-        const cache = path.startsWith("/fonts")
-          ? "public, max-age=31536000"
-          : "public, max-age=300, must-revalidate";
+        // Fonts and artwork are content that only changes when the file changes; the
+        // bundles share a name across deploys and must not be cached for a year.
+        const cache =
+          path.startsWith("/fonts") || path.startsWith("/art")
+            ? "public, max-age=31536000"
+            : "public, max-age=300, must-revalidate";
         res.writeHead(200, { "content-type": type, "cache-control": cache });
         res.end(file);
       } catch {

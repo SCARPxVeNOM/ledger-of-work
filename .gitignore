@@ -39,3 +39,7 @@ apps/verify-page/dist-types/
 apps/web/public/connect.js
 apps/web/public/app.js
 apps/web/public/app.css
+
+# Source artwork. Only the optimised WebP under public/art is committed — the PNGs are
+# 1.5-2.4MB each and apps/web/optimise-art.mjs records exactly how they were reduced.
+apps/web/art-src/
