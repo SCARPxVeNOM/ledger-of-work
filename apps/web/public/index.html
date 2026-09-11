@@ -462,10 +462,24 @@ let tampered = false;
 
 // ── build the form from the seller's real manifest ──────────────
 async function boot() {
+  // A seller that is down does not fail this fetch — it answers 500 with a JSON body,
+  // which parses perfectly well and then throws on the first field that is not there.
+  // The result was a page that rendered, looked fine, and had quietly stopped
+  // initialising half way through, taking the wallet controls with it.
   try {
-    manifest = await fetch("/api/capabilities").then((r) => r.json());
-  } catch {
-    $("err").textContent = "Cannot reach the seller. Is `pnpm seller` running?";
+    const res = await fetch("/api/capabilities");
+    const body = await res.json();
+    if (!res.ok || !body?.payment || !Array.isArray(body.capabilities)) {
+      throw new Error(body?.error ?? `seller returned ${res.status}`);
+    }
+    manifest = body;
+  } catch (e) {
+    $("err").textContent =
+      `Cannot reach the seller (${e.message}). Everything on this page that needs it is ` +
+      `unavailable; wallet connection and receipt verification still work.`;
+    // Deliberately continue rather than return: the wallet section below owes the seller
+    // nothing, and a visitor should still be able to connect one and read the page.
+    await showWallets();
     return;
   }
 
@@ -489,22 +503,7 @@ async function boot() {
     $("m-card").href = manifest.agentCard.explorer;
   }
 
-  // Two ways to pay, and the page should be honest about which is in force.
-  //
-  // The demo wallet is a separate process holding a small, policy-capped testnet key —
-  // convenient, and not the visitor's money. Connecting your own wallet is the real
-  // shape of this: the key stays on your phone and this page never sees it.
-  try {
-    const w = await fetch("/api/wallet").then((r) => r.json());
-    demoWallet = w.connected ? w.accountId : null;
-    renderWallet();
-    if (!w.connected) {
-      $("err").textContent = `No demo wallet at ${w.url}. Connect your own wallet to pay, or start one with \`pnpm wallet\` — this page holds no keys either way.`;
-    }
-  } catch {
-    demoWallet = null;
-    renderWallet();
-  }
+  await showWallets();
 
   loadUsage();
 
@@ -627,6 +626,24 @@ $("btn-quote").onclick = async () => {
 // testnet key in its own process, there so a visitor can see the whole flow without
 // owning anything. Connecting your own wallet is what this actually is — the key stays
 // on your phone, this page never sees it, and the account that pays is yours.
+/**
+ * Work out which wallets are available and say so.
+ *
+ * The demo wallet is a separate process holding a small, policy-capped testnet key —
+ * convenient, and not the visitor's money. Connecting your own wallet is the real shape
+ * of this: the key stays on your phone and this page never sees it. Either may be
+ * absent, and neither depends on the seller being up.
+ */
+async function showWallets() {
+  try {
+    const w = await fetch("/api/wallet").then((r) => r.json());
+    demoWallet = w.connected ? w.accountId : null;
+  } catch {
+    demoWallet = null;
+  }
+  renderWallet();
+}
+
 function renderWallet() {
   const el = $("m-wallet");
   const btn = $("btn-connect");
