@@ -32,7 +32,8 @@
     "feedback": "tsx scripts/feedback.mjs",
     "deploy:railway": "node scripts/deploy-railway.mjs",
     "registry": "tsx scripts/registry.mjs",
-    "standing-order": "tsx scripts/standing-order.mjs"
+    "standing-order": "tsx scripts/standing-order.mjs",
+    "agent": "tsx scripts/agent-discover-and-buy.mjs"
   },
   "devDependencies": {
     "@hiero-ledger/sdk": "^2.87.0",

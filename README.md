@@ -188,6 +188,34 @@ once. The buyer's funds stay in the buyer's account until each moment arrives, a
 seller can verify the whole run exists and is signed — over the public mirror node,
 holding nobody's key — before doing any work.
 
+## An agent that finds this and pays it, knowing nothing
+
+```bash
+pnpm agent --need oracle --budget 500000
+```
+
+No URL, no API key, no account, no prior relationship. A topic id and a sentence:
+
+```
+1. reading the directory (topic 0.0.10473320) — no key, no account
+   cheapest    oracle.capture_claim from 204000 tinybar
+2. fetching its agent card
+   identity    matches the listing
+3. asking for a quote
+   quoted      321000 tinybar   budget 500000 — proceeding
+4. paying the 402
+   receipt     topic 0.0.10413059 seq 31
+5. verifying the receipt against the ledger
+   VERIFIED — 15/15 checks
+```
+
+Give it a budget the job will not fit inside and it walks away at step 3, before paying
+anything — which is the point of a price you can read before you commit.
+
+Step 5 is what makes the other four safe. Discovery hands you an address a stranger
+posted; the receipt is what tells you the thing at that address did the work and charged
+what it said it would.
+
 ## Status
 
 **Working end to end on Hedera testnet.** Eighteen real jobs have been quoted, paid for
