@@ -29,7 +29,8 @@
     "survey": "node scripts/survey-sites.mjs",
     "verify:page": "pnpm --filter @low/verify-page serve",
     "build:page": "pnpm --filter @low/verify-page build",
-    "feedback": "tsx scripts/feedback.mjs"
+    "feedback": "tsx scripts/feedback.mjs",
+    "deploy": "node scripts/deploy-railway.mjs"
   },
   "devDependencies": {
     "@hiero-ledger/sdk": "^2.87.0",

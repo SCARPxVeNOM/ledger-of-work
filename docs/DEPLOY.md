@@ -13,6 +13,24 @@ services rather than one. The verifier is the one worth hosting first.
 On Railway each service points at its own config file — set it per service under
 **Settings → Config-as-code**. One repo, four services, one deploy each.
 
+## The short version
+
+```bash
+pnpm deploy                              # the whole thing
+node scripts/deploy-railway.mjs --dry-run  # print every change, make none
+```
+
+Creates the project, the three services and the seller's volume, sets every variable
+from your `.env`, deploys, assigns domains, and waits for each to answer. Safe to re-run:
+each step checks whether it has already been done, which matters because Railway will
+happily give you a second service called `seller` with no volume attached.
+
+It reads `SELLER_PRIVATE_KEY` from your `.env` and sets it on the seller. That step has to
+be you rather than an assistant, which is why it is a script you run. Secret values are
+never printed — try `--dry-run` first and see.
+
+The rest of this page is what the script does and why, for when it does not work.
+
 ## 1. The verifier — static, free, no secrets
 
 `apps/verify-page` builds to a folder of static files. It reads the public Hedera mirror
