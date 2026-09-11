@@ -32,11 +32,33 @@ ceremonial: the page embeds published price books, and if those ever drift from 
 seller actually charges, the meter check would verify against a price nobody paid. A test
 catches that, and it runs before anything ships.
 
+### Vercel
+
+`vercel.json` at the repo root is already configured for this — build command, output
+directory, and headers. Point Vercel at the repository root, not at `apps/verify-page`:
+the build runs from the workspace root because the page imports `@low/protocol` and
+`@low/worker` as workspace packages.
+
+```bash
+vercel            # preview
+vercel --prod     # production
+```
+
+Two settings in that file are worth knowing about rather than discovering:
+
+- **`--prod=false` on the install.** Vercel sets `NODE_ENV=production` for builds, and
+  the bundler (`esbuild`) is a devDependency. pnpm 10 does not currently prune on
+  `NODE_ENV`, so this changes nothing today — it is there so a pnpm upgrade or an
+  injected `--prod` cannot turn the build into a "cannot find package esbuild" failure.
+- **A restrictive CSP**, because this page is the trust anchor and should be hard to
+  turn into a lying one. `connect-src https:` rather than pinning the mirror node,
+  because the page deliberately lets a sceptic point it at *their* mirror — pinning ours
+  would defeat the purpose of a verifier you are not supposed to trust.
+
 ### Anywhere else
 
-The output is plain files. `netlify deploy --dir apps/verify-page/dist`,
-`vercel deploy apps/verify-page/dist`, an S3 bucket, or a USB stick all work equally
-well. There is nothing to configure.
+The output is plain files. `netlify deploy --dir apps/verify-page/dist`, an S3 bucket, or
+a USB stick all work equally well. There is nothing to configure.
 
 ### Sharing a receipt
 
@@ -69,10 +91,39 @@ No key is baked into the image; everything comes from the runtime environment. T
 volume matters: quotes are price commitments, and without it a redeploy leaves a buyer
 holding a signed payment for a job the seller no longer recognises.
 
-**Hosts that work without modification:** Fly.io, Railway, Render, or any VM. The
+**Hosts that work without modification:** Railway, Render, Fly.io, or any VM. The
 container is around 2 GB because it carries a browser — that is the product working, not
 bloat, and a slim Node base would need the whole browser dependency chain added back by
 hand.
+
+### Railway
+
+`railway.toml` at the repo root configures the build, the health check and the replica
+count. Railway picks it up automatically.
+
+```bash
+railway init          # link the repo
+railway up            # build and deploy the Dockerfile
+```
+
+Then, by hand in the dashboard — neither can be set from the file:
+
+1. **Variables** — `SELLER_ACCOUNT_ID`, `SELLER_PRIVATE_KEY`, `SELLER_TOPIC_ID`, and
+   optionally `AGENT_CARD_FILE_ID`, `PAYMENT_TOKEN_ID`, `ZKTLS_OWNER_KEY`. Without the
+   last one the service runs fine and simply produces no retrieval proofs; the verifier
+   reports that as unproven rather than as fine.
+2. **A volume mounted at `/app/.data`.** Skip this and two things break on every
+   redeploy: outstanding quotes vanish, so a buyer holding a signed payment gets rejected
+   for a job the seller no longer recognises; and the ~26 MB of zero-knowledge circuits
+   are re-downloaded on the first proof.
+
+`numReplicas` is pinned to 1 in `railway.toml`, and that is a correctness constraint
+rather than a cost one — the reasoning is in the file. Raising it needs the quote store
+moved somewhere shared first.
+
+Railway injects its own `PORT`, which overrides the Dockerfile default. The server reads
+it, and the container health check reads it too — a check pinned to 8402 would report a
+healthy container as dead and look exactly like a crash loop.
 
 **Before pointing anyone at it:**
 

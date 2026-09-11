@@ -1,0 +1,40 @@
+# The seller on Railway.
+#
+# Railway rather than a serverless host because this process is not stateless by
+# accident. It drives a real Chromium, keeps that browser alive between jobs so a buyer
+# is not billed for a 300ms cold start, writes price commitments to disk, and caches ~26MB
+# of zero-knowledge circuits. None of that survives a function that is torn down between
+# requests.
+#
+# The verifier is a separate deploy and belongs nowhere near this one — see vercel.json.
+# `apps/wallet` holds a private key and must never be hosted anywhere at all.
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+startCommand = "pnpm seller"
+
+# /health reports whether the Blocky402 facilitator is reachable, not merely whether the
+# process is up. A seller that cannot reach its facilitator cannot settle anything, so
+# taking it out of rotation is correct.
+healthcheckPath = "/health"
+
+# Generous because the first boot launches Chromium and opens a connection to the
+# facilitator. A tight timeout here restarts a container that was about to become healthy.
+healthcheckTimeout = 180
+
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3
+
+# **Must stay 1.** Not a cost decision — a correctness one.
+#
+# A quote is a price commitment: the buyer signs a payment for one specific quote id, and
+# the seller has to recognise it moments later. Quotes live in a file on this instance's
+# volume. With two replicas a buyer can be quoted by one and pay the other, which rejects
+# a perfectly valid signed payment for a job it never issued. The browser instance and the
+# circuit cache are per-process for the same reason.
+#
+# Horizontal scaling needs the quote store moved to something shared first.
+numReplicas = 1
