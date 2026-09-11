@@ -9,6 +9,7 @@ import {
   payloadFromSignedBytes,
   type PaymentRequirements,
 } from "@low/buyer-cli";
+import { serveAsset } from "./assets.js";
 import { readUsage, verifyFromMirror, type VerifyRequest } from "@low/receipts";
 import { CATALOGUE } from "@low/worker";
 
@@ -166,16 +167,11 @@ const server = createServer(async (req, res) => {
               : path.endsWith(".webp")
                 ? "image/webp"
                 : "text/plain; charset=utf-8";
-        // The bundles are rebuilt on every deploy and share a name, so they must not be
-        // cached for a year the way the content-addressed fonts can be.
-        // Fonts and artwork are content that only changes when the file changes; the
-        // bundles share a name across deploys and must not be cached for a year.
-        const cache =
-          path.startsWith("/fonts") || path.startsWith("/art")
-            ? "public, max-age=31536000"
-            : "public, max-age=300, must-revalidate";
-        res.writeHead(200, { "content-type": type, "cache-control": cache });
-        res.end(file);
+        // Fonts and artwork carry their size in the filename, so a changed file is a
+        // changed URL and a year is safe. The bundles keep one name across every deploy,
+        // so they get revalidated instead — see `serveAsset`.
+        const immutable = path.startsWith("/fonts") || path.startsWith("/art");
+        serveAsset(req, res, file, type, immutable);
       } catch {
         res.writeHead(404).end("not found");
       }
@@ -189,11 +185,7 @@ const server = createServer(async (req, res) => {
     if (path === "/connect.js") {
       try {
         const js = readFileSync(join(HERE, "..", "public", "connect.js"));
-        res.writeHead(200, {
-          "content-type": "text/javascript; charset=utf-8",
-          "cache-control": "public, max-age=3600",
-        });
-        res.end(js);
+        serveAsset(req, res, js, "text/javascript; charset=utf-8", false);
       } catch {
         res.writeHead(503, { "content-type": "text/javascript; charset=utf-8" });
         res.end(`throw new Error("connect.js was not built — run \`pnpm --filter @low/web build\`");`);
