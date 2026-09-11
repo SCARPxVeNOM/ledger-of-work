@@ -46,6 +46,27 @@
   --shadow-soft: 0 1px 2px 0 rgb(59 59 59 / 0.09), 0 2px 4px 0 rgb(59 59 59 / 0.05);
   --shadow-lift: 0 2px 4px 0 rgb(59 59 59 / 0.05), 0 8px 20px -6px rgb(59 59 59 / 0.14);
 
+  /* Marquee, as Magic UI expects to find it. */
+  --animate-marquee: marquee var(--duration) linear infinite;
+  --animate-marquee-vertical: marquee-vertical var(--duration) linear infinite;
+
+  @keyframes marquee {
+    from {
+      transform: translateX(0);
+    }
+    to {
+      transform: translateX(calc(-100% - var(--gap)));
+    }
+  }
+  @keyframes marquee-vertical {
+    from {
+      transform: translateY(0);
+    }
+    to {
+      transform: translateY(calc(-100% - var(--gap)));
+    }
+  }
+
   --text-display: clamp(2.5rem, 6.4vw, 5rem);
   --text-display--line-height: 1.02;
   --text-display--letter-spacing: -0.042em;

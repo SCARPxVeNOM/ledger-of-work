@@ -14,6 +14,9 @@ import {
   cx,
 } from "./primitives.js";
 import { MeterWidget, type MeterLine } from "./MeterWidget.js";
+import { AgentBar } from "./AgentBar.js";
+import { HeroCollage } from "./HeroCards.js";
+import { BorderBeam, Marquee, NumberTicker } from "./magicui.js";
 
 /* ─────────────────────────────────────────────────────────────────────────────
  * Types, kept structural rather than imported.
@@ -186,8 +189,10 @@ function Hero({ manifest }: { manifest: Manifest | null }) {
   return (
     <section
       id="top"
-      className="mx-auto flex min-h-[70svh] max-w-[1200px] flex-col items-center justify-center px-6 py-16 text-center"
+      className="relative mx-auto flex min-h-[76svh] max-w-[1320px] flex-col items-center justify-center px-6 py-16 text-center"
     >
+      <HeroCollage />
+
       <Reveal>
         <Pill tone="accent" className="gap-2 px-3 py-1.5">
           <span className="font-mono text-[10px] tracking-[0.14em] uppercase">x402</span>
@@ -392,6 +397,9 @@ interface UsageState {
   succeeded?: number;
   distinctPayers?: number;
   work?: { steps: number };
+  /** Capability → jobs served. Read off the public topic, not from a counter we keep. */
+  byCapability?: Record<string, number>;
+  revenue?: Record<string, string>;
 }
 
 export default function App() {
@@ -410,6 +418,8 @@ export default function App() {
   const [lines, setLines] = useState<MeterLine[]>([]);
   const [meter, setMeter] = useState({ amount: "0", unit: "tinybar", caption: "metered" });
   const [progress, setProgress] = useState<number | null>(null);
+  /** What the worker is doing right now, and how far through — drives the agent bar. */
+  const [step, setStep] = useState({ label: "", done: 0 });
 
   const [run, setRun] = useState<RunBody | null>(null);
   const [checks, setChecks] = useState<Check[] | null>(null);
@@ -535,6 +545,7 @@ export default function App() {
     setTampered(false);
     setMeter({ amount: "0", unit: "tinybar", caption: "metered" });
     setProgress(0);
+    setStep({ label: "starting…", done: 0 });
 
     const book = quote.price.priceBook;
     let n = 0;
@@ -559,6 +570,7 @@ export default function App() {
           { n: String(n).padStart(2, "0"), what: e.label, cost: cost.toString() },
         ]);
         setMeter((m) => ({ ...m, amount: cost.toString() }));
+        setStep({ label: e.label, done: e.steps });
         setProgress(Math.min(0.95, e.steps / Math.max(1, quote.plan.steps)));
       }
       if (e.type === "done" || e.type === "failed") es.close();
@@ -582,6 +594,7 @@ export default function App() {
         { what: `${unit} charged`, cost: body.price.charged, total: true },
       ]);
       setMeter({ amount: body.price.charged, unit, caption: "charged" });
+      setStep({ label: "done — receipt written to Hedera", done: body.work.steps });
       setProgress(1);
       setRun(body);
       setResultHash("computed at verification");
@@ -702,8 +715,9 @@ export default function App() {
                   selected={c.name === cap}
                   onClick={() => setCap(c.name)}
                   aria-pressed={c.name === cap}
-                  className="h-full p-5"
+                  className="h-full overflow-hidden p-5"
                 >
+                  {c.name === cap && <BorderBeam duration={8} size={70} />}
                   <div className="flex items-center justify-between gap-3">
                     <SectionLabel n={String(i + 1).padStart(2, "0")}>{hostOf(c.site)}</SectionLabel>
                     {c.name === cap && <Pill tone="dark">Selected</Pill>}
@@ -807,36 +821,48 @@ export default function App() {
 
         {/* ── 04 — the meter ── */}
         <section id="meter" className="border-y border-line bg-surface-sunk/40">
-          <div className="mx-auto max-w-[1180px] px-6 py-24 md:px-10">
-            <Reveal>
-              <SectionLabel n="04">Live meter</SectionLabel>
-              <EditorialHeading className="mt-6 max-w-[17ch]">
-                Watch the price being earned.
+          <div className="mx-auto max-w-[1200px] px-6 py-24">
+            <Reveal className="text-center">
+              <SectionLabel className="justify-center">Live meter</SectionLabel>
+              <EditorialHeading className="mx-auto mt-4 max-w-[20ch]">
+                Watch the price being <MonoAccent>earned.</MonoAccent>
               </EditorialHeading>
-              <p className="mt-6 max-w-[52ch] text-[15px] leading-[1.7] text-ink-soft">
+              <p className="mx-auto mt-5 max-w-[56ch] text-[15px] leading-[1.65] text-ink-soft">
                 The seller streams the same counter that produces the price. Each line is one step
                 the worker actually performed, priced as it happened.
               </p>
             </Reveal>
             <Reveal delay={80} className="mt-12">
-              <MeterWidget
-                amount={meter.amount}
-                unit={meter.unit}
-                caption={meter.caption}
-                lines={lines}
-                running={running}
-                progress={progress}
-              />
+              <div className="relative pb-8">
+                <MeterWidget
+                  amount={meter.amount}
+                  unit={meter.unit}
+                  caption={meter.caption}
+                  lines={lines}
+                  running={running}
+                  progress={progress}
+                />
+                {/* Overlapping the panel, the way the reference does — attached to the job
+                    rather than floating beside it. */}
+                <div className="absolute inset-x-4 -bottom-1 sm:inset-x-10">
+                  <AgentBar
+                    state={running ? "working" : run ? "done" : "idle"}
+                    label={step.label}
+                    done={step.done}
+                    total={quote?.plan.steps ?? 0}
+                  />
+                </div>
+              </div>
             </Reveal>
           </div>
         </section>
 
         {/* ── 05 — receipts ── */}
-        <section id="receipts" className="mx-auto max-w-[1180px] px-6 py-24 md:px-10">
-          <Reveal>
-            <SectionLabel n="05">Receipts</SectionLabel>
-            <EditorialHeading className="mt-6 max-w-[20ch]">
-              The record you can check without us.
+        <section id="receipts" className="mx-auto max-w-[1200px] px-6 py-24">
+          <Reveal className="text-center">
+            <SectionLabel className="justify-center">Receipts</SectionLabel>
+            <EditorialHeading className="mx-auto mt-4 max-w-[22ch]">
+              The record you can check <MonoAccent>without us.</MonoAccent>
             </EditorialHeading>
           </Reveal>
 
@@ -984,20 +1010,47 @@ export default function App() {
               <Divider label="On the ledger so far" className="mb-6" />
               <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
                 {[
-                  { k: "Jobs", v: fmt(usage.jobs) },
+                  { k: "Jobs", n: usage.jobs ?? 0, suffix: "" },
                   {
                     k: "Success",
-                    v: `${Math.round(((usage.succeeded ?? 0) / (usage.jobs || 1)) * 100)}%`,
+                    n: Math.round(((usage.succeeded ?? 0) / (usage.jobs || 1)) * 100),
+                    suffix: "%",
                   },
-                  { k: "Paying accounts", v: fmt(usage.distinctPayers) },
-                  { k: "Steps metered", v: fmt(usage.work?.steps) },
+                  { k: "Paying accounts", n: usage.distinctPayers ?? 0, suffix: "" },
+                  { k: "Steps metered", n: usage.work?.steps ?? 0, suffix: "" },
                 ].map((s) => (
                   <PaperCard key={s.k} className="p-5">
-                    <p className="font-mono text-[1.75rem] leading-none font-medium tracking-[-0.03em] tabular-nums">{s.v}</p>
+                    <p className="font-mono text-[1.75rem] leading-none font-medium tracking-[-0.03em]">
+                      <NumberTicker value={s.n} />
+                      {s.suffix}
+                    </p>
                     <p className="mt-2 text-[12.5px] text-ink-soft">{s.k}</p>
                   </PaperCard>
                 ))}
               </div>
+            </Reveal>
+          )}
+
+          {usage.byCapability && Object.keys(usage.byCapability).length > 0 && (
+            <Reveal delay={160} className="mt-10">
+              {/* Every chip is a count read off the public topic, including capabilities
+                  we have since retired — this is what was sold, not what is on the menu. */}
+              <Marquee pauseOnHover className="[--duration:38s]">
+                {Object.entries(usage.byCapability)
+                  .sort((a, b) => b[1] - a[1])
+                  .map(([name, n]) => (
+                    <span
+                      key={name}
+                      className="flex items-center gap-2.5 rounded-full bg-surface px-4 py-2 ring-1 ring-line"
+                    >
+                      <span className="font-mono text-[11.5px] text-ink">{name}</span>
+                      <span className="h-3 w-px bg-line" aria-hidden />
+                      <span className="font-mono text-[11.5px] text-ink-faint tabular-nums">
+                        {n} {n === 1 ? "job" : "jobs"}
+                      </span>
+                    </span>
+                  ))}
+              </Marquee>
             </Reveal>
           )}
         </section>
