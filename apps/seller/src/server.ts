@@ -45,9 +45,31 @@ export async function startSeller(config: SellerConfig) {
     topicId: config.topicId,
   });
 
-  // One browser for the process. Launching Chromium costs ~300ms that no buyer should
-  // be billed for; each job still gets its own isolated context.
-  const browser: Browser = await chromium.launch({ headless: true });
+  /**
+   * One browser for the process, started on the first job rather than at boot.
+   *
+   * Still one browser: launching Chromium costs ~300ms that no buyer should be billed
+   * for, and each job gets its own isolated context off it. What changed is *when*.
+   *
+   * Launching at startup made the browser a condition of the service existing at all. If
+   * Chromium cannot start — wrong image, no shared memory, too little RAM on a small
+   * container — the process died before it could bind a port or answer `/health`, so the
+   * one thing that could have said what was wrong was the thing that never ran. A
+   * platform then reports "deploy failed" with no logs, which is indistinguishable from
+   * a dozen other faults.
+   *
+   * Now the service starts, `/health` answers, and a browser failure is reported by the
+   * job that needed it, with the real error attached.
+   */
+  let browser: Browser | null = null;
+  async function getBrowser(): Promise<Browser> {
+    // `isConnected` guards the case where Chromium died mid-life: relaunch rather than
+    // hand a dead handle to the next job.
+    if (!browser || !browser.isConnected()) {
+      browser = await chromium.launch({ headless: true });
+    }
+    return browser;
+  }
   const quotes = new QuoteStore({ path: config.quoteStorePath });
   const events = new JobEventRegistry();
   const sweeper = setInterval(() => quotes.sweep(), 60_000);
@@ -140,6 +162,9 @@ export async function startSeller(config: SellerConfig) {
       return send(res, 200, {
         ok: true,
         facilitator: await facilitator.health(),
+        // Whether the browser has been needed yet, and whether it is alive. A seller
+        // reporting healthy while unable to launch Chromium would be lying by omission.
+        browser: browser ? (browser.isConnected() ? "ready" : "disconnected") : "not started",
         topicId: config.topicId,
         openQuotes: quotes.size,
       });
@@ -273,7 +298,7 @@ export async function startSeller(config: SellerConfig) {
           adapter,
           facilitator,
           publisher,
-          browser,
+          browser: await getBrowser(),
           sellerAccountId: config.sellerAccountId,
           network: config.network,
           onStep: (e) => stream.fromStep(e),
@@ -365,7 +390,7 @@ export async function startSeller(config: SellerConfig) {
     async close() {
       clearInterval(sweeper);
       await new Promise<void>((resolve) => server.close(() => resolve()));
-      await browser.close();
+      if (browser) await browser.close().catch(() => {});
       publisher.close();
     },
   };
