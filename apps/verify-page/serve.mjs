@@ -12,7 +12,16 @@ import { createServer } from "node:http";
 import { readFileSync } from "node:fs";
 import { extname, join, normalize } from "node:path";
 
-const PORT = Number(process.env.VERIFY_PORT ?? 8405);
+const PORT = Number(process.env.PORT ?? process.env.VERIFY_PORT ?? 8405);
+
+/**
+ * Bind every interface, not Node's default.
+ *
+ * `listen(port)` alone binds `::`, which is enough on a laptop and not enough behind a
+ * platform proxy that connects over IPv4 — the process starts, logs happily, and every
+ * request from the edge returns 502. Worth stating explicitly rather than inheriting.
+ */
+const HOST = process.env.HOST ?? "0.0.0.0";
 const ROOT = "dist";
 
 const TYPES = {
@@ -61,6 +70,6 @@ createServer((req, res) => {
     res.writeHead(404, { "content-type": "text/plain; charset=utf-8", ...HEADERS });
     res.end("not found");
   }
-}).listen(PORT, () => {
-  console.log(`verifier  http://0.0.0.0:${PORT}  (static, no keys, no backend)`);
+}).listen(PORT, HOST, () => {
+  console.log(`verifier  http://${HOST}:${PORT}  (static, no keys, no backend)`);
 });

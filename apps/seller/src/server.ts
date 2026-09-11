@@ -351,7 +351,12 @@ export async function startSeller(config: SellerConfig) {
     return send(res, 404, { error: "not_found", path });
   }
 
-  await new Promise<void>((resolve) => server.listen(config.port, resolve));
+  // Bind every interface. Node's default binds `::` only, which a platform proxy
+  // connecting over IPv4 cannot reach — the service looks healthy in its own logs while
+  // every request from outside returns 502.
+  await new Promise<void>((resolve) =>
+    server.listen(config.port, process.env.HOST ?? "0.0.0.0", resolve),
+  );
 
   return {
     server,

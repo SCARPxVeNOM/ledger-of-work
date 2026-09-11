@@ -28,7 +28,9 @@ import { CATALOGUE } from "@low/worker";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SELLER = process.env.SELLER_URL ?? "http://localhost:8402";
-const PORT = Number(process.env.WEB_PORT ?? 8403);
+const PORT = Number(process.env.PORT ?? process.env.WEB_PORT ?? 8403);
+/** See the verifier's server: Node's default bind is not reachable behind a proxy. */
+const HOST = process.env.HOST ?? "0.0.0.0";
 const WALLET = process.env.WALLET_URL ?? "http://127.0.0.1:8404";
 const WALLET_TOKEN = process.env.WALLET_TOKEN;
 
@@ -320,7 +322,7 @@ const server = createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, () => {
-  console.log(`demo UI   http://localhost:${PORT}`);
+server.listen(PORT, HOST, () => {
+  console.log(`demo UI   http://${HOST}:${PORT}`);
   console.log(`seller    ${SELLER}`);
 });

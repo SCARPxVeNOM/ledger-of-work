@@ -1,4 +1,10 @@
-# The seller on Railway.
+# The seller on Railway.  (Service config: point this service's config file here.)
+#
+# Named `railway.seller.toml` rather than `railway.toml` on purpose. Railway reads a bare
+# `railway.toml` at the repo root for *every* service in the project, so a single one here
+# would tell the verifier and the demo UI to build the seller's 2GB browser image and
+# health-check a path they do not serve. Four services in one repo means four files and a
+# config path set per service.
 #
 # Railway rather than a serverless host because this process is not stateless by
 # accident. It drives a real Chromium, keeps that browser alive between jobs so a buyer
