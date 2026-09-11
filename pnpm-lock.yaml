@@ -65,6 +65,9 @@ importers:
 
   apps/seller:
     dependencies:
+      '@low/identity':
+        specifier: workspace:*
+        version: link:../../packages/identity
       '@low/proof':
         specifier: workspace:*
         version: link:../../packages/proof
@@ -145,6 +148,12 @@ importers:
       esbuild:
         specifier: ^0.25.12
         version: 0.25.12
+
+  packages/identity:
+    dependencies:
+      '@low/protocol':
+        specifier: workspace:*
+        version: link:../protocol
 
   packages/proof:
     dependencies:

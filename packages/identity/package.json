@@ -1,0 +1,13 @@
+{
+  "name": "@low/identity",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Who this agent is, in the forms other agents already read: an HCS-14 universal agent id and an A2A agent card.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./portable": "./src/portable.ts"
+  },
+  "scripts": { "build": "tsc --build" },
+  "dependencies": { "@low/protocol": "workspace:*" }
+}

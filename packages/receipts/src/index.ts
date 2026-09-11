@@ -24,6 +24,16 @@ export {
   type VerifyRequest,
 } from "./verifier.js";
 export {
+  LISTING_VERSION,
+  ListingTooLargeError,
+  buildListing,
+  formatDirectory,
+  listingBytes,
+  readDirectory,
+  type DirectoryEntry,
+  type Listing,
+} from "./registry.js";
+export {
   formatUsage,
   readUsage,
   summariseUsage,

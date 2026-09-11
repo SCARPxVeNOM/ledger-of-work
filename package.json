@@ -30,7 +30,9 @@
     "verify:page": "pnpm --filter @low/verify-page serve",
     "build:page": "pnpm --filter @low/verify-page build",
     "feedback": "tsx scripts/feedback.mjs",
-    "deploy:railway": "node scripts/deploy-railway.mjs"
+    "deploy:railway": "node scripts/deploy-railway.mjs",
+    "registry": "tsx scripts/registry.mjs",
+    "standing-order": "tsx scripts/standing-order.mjs"
   },
   "devDependencies": {
     "@hiero-ledger/sdk": "^2.87.0",

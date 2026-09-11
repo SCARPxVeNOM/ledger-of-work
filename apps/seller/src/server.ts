@@ -3,10 +3,19 @@ import { HBAR, priceTinybars, tinybarToAssetUnits, type AssetSpec } from "@low/p
 import { CATALOGUE, BadParamsError, getCapability } from "@low/worker";
 import { ReceiptPublisher } from "@low/receipts";
 import { chromium, type Browser } from "playwright";
+import { agentUaid, buildAgentCard, SKILL_TAGS } from "@low/identity";
 import { FacilitatorClient, type PaymentPayload } from "./facilitator.js";
 import { JobEventRegistry } from "./events.js";
 import { PaymentRejectedError, executeJob } from "./jobs.js";
 import { QuoteStore } from "./quote-store.js";
+
+/**
+ * Part of the HCS-14 identifier, so bumping it renames the agent.
+ *
+ * That is the intended behaviour — a different version of a service is a different agent
+ * as far as discovery is concerned — but it means this is not a number to change idly.
+ */
+const SERVICE_VERSION = "0.1.0";
 
 export interface SellerConfig {
   port: number;
@@ -78,6 +87,26 @@ export async function startSeller(config: SellerConfig) {
   const base = config.publicUrl ?? `http://localhost:${config.port}`;
 
   /**
+   * This service's HCS-14 universal agent id.
+   *
+   * Derived from what the service *is* — its name, version, protocol and Hedera account —
+   * rather than from where it happens to be hosted. Two agents that meet it through
+   * different channels, or after it moves host, compute the same identifier without
+   * consulting any registry.
+   *
+   * Deliberately not derived from `base`: an identifier that changes when the URL changes
+   * is an address wearing an identifier's clothes.
+   */
+  const uaid = agentUaid({
+    registry: "ledger-of-work",
+    name: "Ledger of Work",
+    version: SERVICE_VERSION,
+    protocol: "a2a",
+    nativeId: `hedera:${config.network.split(":")[1] ?? "testnet"}:${config.sellerAccountId}`,
+    skills: SKILL_TAGS,
+  });
+
+  /**
    * The capability manifest — the discoverability half of the pitch.
    *
    * Another agent reads this, sees what is for sale, what each unit of work costs, and
@@ -89,6 +118,8 @@ export async function startSeller(config: SellerConfig) {
 
   const manifest = () => ({
     name: "Ledger of Work",
+    /** HCS-14. The stable name for this agent; the URL is only where it is today. */
+    uaid,
     description:
       "Pay-per-job access to websites that cannot be turned into an API, with a receipt anyone can verify.",
     x402Version: 2,
@@ -156,6 +187,33 @@ export async function startSeller(config: SellerConfig) {
 
     if (path === "/" || path === "/.well-known/x402" || path === "/manifest") {
       return send(res, 200, manifest());
+    }
+
+    // The same service, described the way A2A clients expect to find it. RFC 8615 path,
+    // generated from the same specs the seller prices and executes from — a hand-written
+    // card is a second copy of the catalogue, and a second copy drifts until an agent
+    // discovers a skill that no longer exists.
+    if (path === "/.well-known/agent-card.json" || path === "/.well-known/agent.json") {
+      return send(
+        res,
+        200,
+        buildAgentCard({
+          baseUrl: base,
+          uaid,
+          account: config.sellerAccountId,
+          receiptsTopic: config.topicId,
+          network: config.network,
+          version: SERVICE_VERSION,
+          capabilities: Object.values(CATALOGUE).map((a) => ({
+            name: a.spec.name,
+            description: a.spec.description,
+            site: a.spec.site,
+            // The floor: base plus one step, one page, one second. A number an agent can
+            // rank providers by without paying for a quote round trip first.
+            fromTinybar: priceTinybars({ steps: 1, pages: 1, sessionMs: 1000 }, a.spec.priceBook),
+          })),
+        }),
+      );
     }
 
     if (path === "/health") {

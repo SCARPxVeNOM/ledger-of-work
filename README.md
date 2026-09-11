@@ -131,6 +131,63 @@ clicking that reached it. It needs a source whose answer arrives in one response
 client-rendered page has none, and the adapter returns null rather than attempting it. And
 the witness is a third party, with everything that implies.
 
+## Being found, and being paid on a schedule
+
+Four things an agent needs that a manifest alone does not give it.
+
+**A name that is not an address.** The service publishes an
+[HCS-14](https://hol.org/docs/standards/hcs-14/) universal agent id, derived from what it
+*is* — name, version, protocol, Hedera account — and not from where it is hosted. Two
+agents that meet it through different channels compute the same identifier without
+consulting any registry, and it survives a change of host:
+
+```
+uaid:aid:4Qsy3gHWJbC7GChe8WhWnmFXNLkTpuucn36TW4HgtaQyDU1MgAnEiWhpYsohHGwJ7B
+  ;uid=0;registry=ledger-of-work;proto=a2a;nativeId=hedera:testnet:0.0.10410493
+```
+
+Base58 of a SHA-384 over six canonical fields. `packages/identity` computes it, and the
+tests recompute it the long way rather than asserting our own output — the whole value is
+that a stranger derives the same string.
+
+**A card in the shape other agents read.** `/.well-known/agent-card.json` serves an
+[A2A](https://a2a-protocol.org/) agent card, generated from the same specs the seller
+prices and executes from. Each capability becomes a skill with a price floor, so an agent
+can rank providers before spending a quote round trip. It declares `x402` as its interface
+rather than implying an A2A task endpoint it does not serve.
+
+**A directory with nobody in charge.** Services list themselves on an open HCS topic
+([`0.0.10473320`](https://hashscan.io/testnet/topic/0.0.10473320)) that has **no submit
+key** — anyone can add themselves, nobody can delete an entry, and reading it needs no
+account:
+
+```bash
+pnpm registry list                      # who is out there
+pnpm registry find --skill oracle       # who sells what you need
+pnpm registry publish --url https://…   # add yourself
+```
+
+A directory you have to trust the operator of would be a strange thing to put in front of
+a project whose claim is that you need not trust the seller. Every entry carries the
+account that posted it; each names the receipts topic where its history can be checked.
+
+**Payment on a schedule, not per call.** x402 settles one job at a time, which suits a
+stranger buying once and suits an agent buying hourly rather badly. `pnpm standing-order`
+creates a run of [Hedera Scheduled
+Transactions](https://docs.hedera.com/learn/core-concepts/transactions/scheduled) — each
+signed now, each executing at its own future second:
+
+```
+  1/2  0.0.10473347  executes 2026-09-11T08:49:21Z   ->  EXECUTED
+  2/2  0.0.10473349  executes 2026-09-11T08:49:58Z   ->  EXECUTED
+```
+
+`setWaitForExpiry(true)` is what makes it a standing order rather than a burst: without
+it a single-signature transfer executes the moment it is signed, so all of them fire at
+once. The buyer's funds stay in the buyer's account until each moment arrives, and the
+seller can verify the whole run exists and is signed — over the public mirror node,
+holding nobody's key — before doing any work.
+
 ## Status
 
 **Working end to end on Hedera testnet.** Eighteen real jobs have been quoted, paid for
@@ -144,6 +201,9 @@ answer carries an independent attestor's signature.
 | `packages/worker` — site adapters, Playwright runtime, work meter | done |
 | Real-site adapters (whitehouse.gov, govinfo.gov, UVa Library Virgo) | done |
 | `packages/proof` — zkTLS retrieval proofs, produced and checked | done |
+| `packages/identity` — HCS-14 agent id, A2A agent card | done |
+| Open service directory on HCS, no submit key | done |
+| Recurring payment via Scheduled Transactions (HIP-423) | done |
 | `packages/receipts` — HCS publisher + mirror-node reader | done |
 | `apps/seller` — x402 resource server | done |
 | `apps/buyer-cli` — buying agent | done |
@@ -155,7 +215,7 @@ answer carries an independent attestor's signature.
 | HTS token as payment asset | done |
 | Agent card on Hedera File Service | done |
 
-263 tests, none of which touch the network. The proof tests run against a real attestor
+296 tests, none of which touch the network. The proof tests run against a real attestor
 signature captured on 2026-09-09, because a hand-built fixture cannot tell a valid
 signature from a forged one and every test would pass.
 
