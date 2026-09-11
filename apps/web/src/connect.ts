@@ -62,10 +62,57 @@ async function getConnector(): Promise<DAppConnector> {
   return c;
 }
 
-/** Open the wallet modal and return the account that connected. */
-export async function connectWallet(): Promise<Connection> {
+/** Raised when the visitor dismisses the wallet modal. Not a fault; the caller says so. */
+export class WalletCancelled extends Error {
+  constructor() {
+    super("wallet connection cancelled");
+    this.name = "WalletCancelled";
+  }
+}
+
+/**
+ * Open the wallet modal and return the account that connected.
+ *
+ * ── The second argument is the whole point ──────────────────────────────────────
+ * `openModal(pairingTopic, throwErrorOnReject)` defaults `throwErrorOnReject` to **false**,
+ * and with it false the connector subscribes to nothing: closing the modal does not
+ * reject, `approval()` never resolves, and the promise stays pending for the life of the
+ * page. Every caller then sits on whatever "connecting…" state it set, forever, with no
+ * error to report and nothing in the console — which is precisely what it looked like.
+ *
+ * Passing `true` makes dismissal reject, so a cancelled connection is an outcome rather
+ * than a hang.
+ *
+ * The timeout is the second half of the same problem. Rejection covers the visitor
+ * closing the modal; it does not cover a relay that accepts the pairing and never
+ * delivers an approval, which leaves the same pending promise by a different route. A
+ * connection nobody is going to complete should end by itself.
+ */
+export async function connectWallet(timeoutMs = 180_000): Promise<Connection> {
   const c = await getConnector();
-  const session = await c.openModal();
+
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const expiry = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error("the wallet did not respond — close the modal and try again")),
+      timeoutMs,
+    );
+  });
+
+  let session: Awaited<ReturnType<typeof c.openModal>>;
+  try {
+    session = await Promise.race([c.openModal(undefined, true), expiry]);
+  } catch (err) {
+    // The connector words dismissal as a rejected pairing. Rename it, so the caller can
+    // tell "they changed their mind" from "something broke".
+    if (/rejected pairing/i.test((err as Error).message)) throw new WalletCancelled();
+    throw err;
+  } finally {
+    clearTimeout(timer);
+    // On the timeout path the connector's own `finally` has not run, so the modal would
+    // otherwise be left open over a page that has given up waiting for it.
+    c.walletConnectModal.closeModal();
+  }
 
   // HIP-30 form: `hedera:testnet:0.0.x`. The bare account id is what everything
   // downstream wants, so unwrap it here rather than in three places.

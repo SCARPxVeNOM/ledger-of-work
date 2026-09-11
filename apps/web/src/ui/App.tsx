@@ -538,7 +538,11 @@ export default function App() {
       const mod = await import("../connect.js");
       setConnected(await mod.connectWallet());
     } catch (e) {
-      setError(`Could not connect: ${(e as Error).message}`);
+      // Closing the modal is a decision, not a failure. Reporting it in red alongside
+      // real errors teaches people to ignore the red.
+      if ((e as Error).name !== "WalletCancelled") {
+        setError(`Could not connect: ${(e as Error).message}`);
+      }
     } finally {
       setWalletBusy(false);
     }
