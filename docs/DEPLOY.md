@@ -61,14 +61,20 @@ Two settings in that file are worth knowing about rather than discovering:
   `NODE_ENV`, so this changes nothing today — it is there so a pnpm upgrade or an
   injected `--prod` cannot turn the build into a "cannot find package esbuild" failure.
 - **A restrictive CSP**, because this page is the trust anchor and should be hard to
-  turn into a lying one. `connect-src https:` rather than pinning the mirror node,
-  because the page deliberately lets a sceptic point it at *their* mirror — pinning ours
-  would defeat the purpose of a verifier you are not supposed to trust.
+  turn into a lying one. Everything is `'self'` except `connect-src https:`, which is
+  deliberately not pinned to our mirror node — the page lets a sceptic point it at
+  *theirs*, and pinning ours would defeat the purpose of a verifier nobody is supposed to
+  trust.
 
 ### Anywhere else
 
-The output is plain files. `netlify deploy --dir apps/verify-page/dist`, an S3 bucket, or
-a USB stick all work equally well. There is nothing to configure.
+The output is plain files, and they are genuinely self-contained: fonts are vendored
+into `public/fonts`, so the page renders correctly from `netlify deploy --dir
+apps/verify-page/dist`, an S3 bucket, a USB stick, or a laptop with no network beyond the
+mirror node. There is nothing to configure and nothing to fetch.
+
+Fonts are declared per unicode-range, so a visitor downloads only the subsets their page
+actually needs — 4 files and about 71 KB of the 150 KB vendored, in practice.
 
 ### Sharing a receipt
 

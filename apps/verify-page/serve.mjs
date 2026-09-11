@@ -23,12 +23,17 @@ const TYPES = {
   ".svg": "image/svg+xml",
   ".png": "image/png",
   ".ico": "image/x-icon",
+  ".woff2": "font/woff2",
+  ".txt": "text/plain; charset=utf-8",
 };
 
 const HEADERS = {
+  // Every source is 'self' except the mirror node. The fonts used to require naming two
+  // Google origins here; vendoring them removed both, which is the real reason to
+  // self-host — the policy got shorter and strictly stricter.
   "Content-Security-Policy":
-    "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
-    "font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src https:; " +
+    "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; " +
+    "font-src 'self'; img-src 'self' data:; connect-src https:; " +
     "base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
   "X-Content-Type-Options": "nosniff",
   "Referrer-Policy": "no-referrer",
