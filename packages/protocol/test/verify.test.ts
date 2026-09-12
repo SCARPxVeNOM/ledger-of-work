@@ -496,3 +496,51 @@ describe("a check that could not be run is not a check that failed", () => {
     }
   });
 });
+
+describe("a missing price book", () => {
+  /**
+   * The meter check needs a price book to compare the quote against. Without one there is
+   * nothing to check, which is not the same as the check failing — and the difference is
+   * the whole verdict, because `ok` tolerates unchecked and does not tolerate false.
+   *
+   * This mattered in the open: the hosted verifier's capability selector starts on "skip
+   * the meter check", so the page's default state stamped VOID on a receipt where every
+   * check that could run had passed. Anyone opening the verifier and pressing the button
+   * was told the seller was lying.
+   */
+  const withoutBook = () => {
+    const receipt = makeReceipt();
+    return verifyReceipt({
+      resultHash: hashCanonical(RESULT),
+      pageHash: EVIDENCE.pageHash,
+      screenshotHash: EVIDENCE.screenshotHash,
+      message: makeMessage(receipt),
+      transaction: makeTransaction(receipt),
+      expectedSubmitter: SELLER,
+    });
+  };
+
+  it("reports the meter as unchecked rather than failed", () => {
+    const meter = withoutBook().checks.find((c) => c.id === "meter");
+
+    expect(meter?.ok).toBe(false);
+    expect(meter?.unchecked).toBe(true);
+  });
+
+  it("still reaches a verdict of verified", () => {
+    const out = withoutBook();
+
+    expect(out.ok).toBe(true);
+    // Nothing else may quietly become unchecked to get there.
+    expect(out.checks.filter((c) => c.unchecked).map((c) => c.id)).toEqual(["meter"]);
+  });
+
+  it("keeps failing the meter when a book is supplied and the quote disagrees", () => {
+    // The guard above must not turn a real overcharge into a shrug.
+    const out = verifyFixture({ receipt: { price: { charged: String(BigInt(EXPECTED_CHARGE) * 9n) } } });
+    const meter = out.checks.find((c) => c.id === "meter");
+
+    expect(meter?.unchecked).toBeFalsy();
+    expect(out.ok).toBe(false);
+  });
+});

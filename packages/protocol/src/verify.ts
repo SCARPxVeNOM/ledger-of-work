@@ -366,7 +366,16 @@ export function verifyReceipt(input: VerifyInput): VerifyOutput {
       }`,
     );
   } else {
-    add("meter", "Quote follows the published price book", false, "no price book supplied");
+    // Not a failure — a question nobody asked. Without a price book there is nothing to
+    // compare the quote against, so calling it false accuses the seller of overcharging
+    // on the strength of a missing input. It stamped VOID on sound receipts, and on the
+    // hosted verifier it did so by default, because the capability selector starts on
+    // "skip the meter check".
+    cannotCheck(
+      "meter",
+      "Quote follows the published price book",
+      "not checked — choose the capability to compare against its published book",
+    );
   }
 
   // A verdict, not a score: anything that actually failed makes this false, while checks
