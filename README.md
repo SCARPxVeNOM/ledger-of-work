@@ -1,15 +1,141 @@
 # Ledger of Work
 
-**Proof of what a paid agent service delivered — demonstrated on web jobs, because those
-are the hardest to verify.**
+**A live x402-gated service on Hedera that sells multi-step web work, priced by the work
+it actually performs — and an agent that discovers it and pays for it with no API key, no
+account, and no prior relationship.**
 
-When software buys data from software, the buyer receives bytes and nothing else. It has
-no instinct for "that number looks wrong", no way to check, and the payment has already
-settled. This makes every job leave a record on Hedera that anyone can check without
-trusting the seller.
+Every job leaves a receipt on Hedera Consensus Service that anyone can check without
+trusting the seller. Settlement runs through the [Blocky402](https://blocky402.com/)
+facilitator on Hedera testnet.
 
-Built for the AI & Agentic Payments on Hedera track — x402 settlement through the
-[Blocky402](https://blocky402.com/) facilitator, receipts on Hedera Consensus Service.
+![The service](docs/screenshots/01-hero.png)
+
+## Live right now
+
+| | URL | What it is |
+| --- | --- | --- |
+| **Service** | [seller-production-d5ab.up.railway.app](https://seller-production-d5ab.up.railway.app) | The x402-gated seller. Returns its manifest as JSON to agents, as a page to browsers. |
+| **Buyer** | [web-production-187614.up.railway.app](https://web-production-187614.up.railway.app) | Order a job, watch the meter, pay from your own wallet. |
+| **Verifier** | [verifier-production-0199.up.railway.app](https://verifier-production-0199.up.railway.app) | Check any receipt against the public mirror node. No account, no install. |
+| **Receipts** | [topic `0.0.10413059`](https://hashscan.io/testnet/topic/0.0.10413059) | 47 real jobs, quoted, paid and recorded on chain. |
+| **Directory** | [topic `0.0.10473320`](https://hashscan.io/testnet/topic/0.0.10473320) | An open agent directory with no submit key — anyone may list. |
+
+## See it charge you, in one command
+
+No install, no key, no account. Ask for a quote, then call the job and read the 402:
+
+```bash
+SELLER=https://seller-production-d5ab.up.railway.app
+
+RUN=$(curl -s -X POST $SELLER/jobs -H 'content-type: application/json' \
+  -d '{"capability":"quotes.search_and_extract","params":{"tag":"love","max":3}}' \
+  | python -c "import json,sys; print(json.load(sys.stdin)['run'])")
+
+curl -s -i -X POST "$RUN" | grep -i payment-required
+```
+
+Which answers, from the live service:
+
+```http
+HTTP/1.1 402 Payment Required
+payment-required: {"x402Version":2,"accepts":[{"scheme":"exact","network":"hedera:testnet",
+  "amount":"312000","payTo":"0.0.10410493","maxTimeoutSeconds":300,"asset":"0.0.0",
+  "extra":{"feePayer":"0.0.7162784"}}]}
+```
+
+**That `amount` is not a flat fee.** It was computed from a plan — three steps, one page —
+against a price book published before the job ran. Change `max` and watch it track the
+work rather than the request:
+
+| Asked for | Plan | Price |
+| --- | --- | --- |
+| 3 quotes | 3 steps, 1 page | 312,000 tinybar |
+| 10 quotes | 3 steps, 1 page | 312,000 tinybar |
+| 40 quotes | 4 steps, 2 pages | 456,000 tinybar |
+
+Ten costs the same as three because ten still fit on one page — the seller does no more
+work, so it charges no more. Forty needs a second page, and the price moves. The meter
+prices *pages traversed and steps taken*, not items requested, which is the difference
+between metering and a tariff. See [How it works](#how-it-works).
+
+To go the rest of the way and actually pay, `pnpm agent` runs a buying agent that finds
+the service in the on-chain directory, reads its price book, pays and verifies — knowing
+nothing at the start but a topic id. See [An agent that finds this and pays it](#an-agent-that-finds-this-and-pays-it-knowing-nothing).
+
+## What is for sale
+
+![The catalogue](docs/screenshots/02-capabilities.png)
+
+Four capabilities, all against **real sites that have no usable API** — a government
+publications archive, a university library catalogue, whitehouse.gov, and a login-gated
+sandbox. Each is a multi-step browser job: log in, search, filter, paginate, extract.
+
+The seller publishes its own manifest, and will render it for a person or hand it to an
+agent as JSON depending on what you ask for:
+
+![The seller's manifest](docs/screenshots/03-seller-manifest.png)
+
+## Verification is the point
+
+Anyone can check a receipt without an account, without installing anything, and without
+asking the seller for permission — the page reads the public Hedera mirror node from your
+browser and runs the same code as the command-line verifier.
+
+Here is receipt **18** with the files it committed to. Fourteen checks, all green,
+including a zkTLS attestor's signature over the source response:
+
+![A receipt that verifies](docs/screenshots/04-verified.png)
+
+Now the same receipt, the same page, the same screenshot, the same proof — with **one
+character** of the answer changed:
+
+![The same receipt, one character changed](docs/screenshots/05-void.png)
+
+Thirteen checks still pass. The payment settled, the price follows the published book, the
+page and screenshot and retrieval proof are all intact. One check fails, and the verdict is
+**VOID**. That is the whole product in two pictures.
+
+Try it yourself on [the verifier](https://verifier-production-0199.up.railway.app) with
+topic `0.0.10413059`, sequence `18`, seller `0.0.10410493`, and `result-proof.json` from
+this repo.
+
+## How this maps to the track
+
+| Qualification | Where |
+| --- | --- |
+| Live x402-gated service on Hedera, settled through Blocky402 | [the seller](https://seller-production-d5ab.up.railway.app), `apps/seller` — `/health` reports the facilitator |
+| A platform or agent that consumes it, ≥1 real paid request | 47 paid jobs on [topic `0.0.10413059`](https://hashscan.io/testnet/topic/0.0.10413059); `apps/buyer-cli`, `apps/web`, `scripts/agent-discover-and-buy.mjs` |
+| Public repo with setup, architecture and payment flow | this file — [Try it](#try-it), [How it works](#how-it-works) |
+| Demo video ≤ 5 minutes | [`docs/DEMO.md`](docs/DEMO.md) is the script it follows |
+
+| Extra credit | Where |
+| --- | --- |
+| Metering rather than a flat per-request charge | [How it works](#how-it-works) — priced per step, per page and per second against a published book |
+| A2A / ACP negotiation and settlement | `/.well-known/agent-card.json`, generated from the same specs the seller prices from |
+| On-chain agent identity — ERC-8004 or HCS-14 | `packages/identity` — HCS-14 UAID, SHA-384 over six canonical fields |
+| Agent discovery via a directory | [topic `0.0.10473320`](https://hashscan.io/testnet/topic/0.0.10473320), open, no submit key |
+| HTS tokens in the settlement path | 4 of the 47 receipts settle in a `WORK` HTS token rather than HBAR |
+| Verifiable payment audit trails on HCS | the receipts, and [the verifier](https://verifier-production-0199.up.railway.app) that reads them |
+| Recurring payments via Scheduled Transactions | `scripts/standing-order.mjs` — HIP-423, two executed 37 seconds apart |
+
+## Honest limits
+
+Stated here rather than buried, because a project about verifiable claims should be
+checkable about its own.
+
+- **One paying account.** All 47 receipts were paid by `0.0.10410543`, which is ours. The
+  system works; it has not yet been used by a stranger.
+- **A witness, not mathematics.** A retrieval proof says an independent attestor observed
+  the TLS session. Compromise the attestor and it is worth what any signature from a
+  compromised key is worth.
+- **It does not prove the site was right.** If the source was wrong, the receipt records a
+  wrong answer perfectly. Nothing here is a fact-checker.
+- **Not every capability carries a proof.** Receipts without one are reported as unproven
+  rather than fine — the verifier never treats a missing check as a passing one.
+- **The directory contains a stale entry.** An early test published `http://localhost:8402`
+  before the service was hosted. The topic is append-only and has no submit key, by
+  design, so it cannot be deleted — readers fold to the newest entry per agent id, which
+  is exactly the case the fold exists to handle.
 
 ## What the receipt proves, and what it does not
 
@@ -218,10 +344,11 @@ what it said it would.
 
 ## Status
 
-**Working end to end on Hedera testnet.** Eighteen real jobs have been quoted, paid for
-through the Blocky402 facilitator, executed against live sites, receipted on HCS, and
-independently verified — including one that failed and was charged nothing, and one whose
-answer carries an independent attestor's signature.
+**Working end to end on Hedera testnet.** Forty-seven real jobs have been quoted, paid
+for through the Blocky402 facilitator, executed against live sites, receipted on HCS and
+independently verified — across five capabilities, four of them settled in an HTS token
+rather than HBAR, four carrying an independent attestor's signature over the source
+response, and including one that failed and was charged nothing.
 
 | Component | State |
 | --- | --- |
@@ -243,7 +370,7 @@ answer carries an independent attestor's signature.
 | HTS token as payment asset | done |
 | Agent card on Hedera File Service | done |
 
-296 tests, none of which touch the network. The proof tests run against a real attestor
+326 tests, none of which touch the network. The proof tests run against a real attestor
 signature captured on 2026-09-09, because a hand-built fixture cannot tell a valid
 signature from a forged one and every test would pass.
 
