@@ -52,11 +52,13 @@ work rather than the request:
 | 3 quotes | 3 steps, 1 page | 312,000 tinybar |
 | 10 quotes | 3 steps, 1 page | 312,000 tinybar |
 | 40 quotes | 4 steps, 2 pages | 456,000 tinybar |
+| 100 quotes, unfiltered | 12 steps, 10 pages | 1,572,000 tinybar |
 
 Ten costs the same as three because ten still fit on one page — the seller does no more
-work, so it charges no more. Forty needs a second page, and the price moves. The meter
-prices *pages traversed and steps taken*, not items requested, which is the difference
-between metering and a tariff. See [How it works](#how-it-works).
+work, so it charges no more. Forty needs a second page, and the price moves; a hundred
+costs five times three, for four times the work. The meter prices *pages traversed and
+steps taken*, not items requested, which is the difference between metering and a tariff.
+See [How it works](#how-it-works).
 
 To go the rest of the way and actually pay, `pnpm agent` runs a buying agent that finds
 the service in the on-chain directory, reads its price book, pays and verifies — knowing
@@ -111,6 +113,13 @@ page and screenshot and retrieval proof are all intact. One check fails, and the
 That gives **VERIFIED**. Now swap the result file for
 `samples/result-proof.tampered.json` — the same job with one character changed — and the
 same inputs give **VOID**.
+
+**What each kind of tampering moves.** Change one character of the result and only the
+result check goes red. Flip one bit of the screenshot and only the screenshot check moves.
+Flip one bit of the attestor's signature and two go red — the proof no longer matches what
+the receipt committed to, and the signature no longer verifies. That independence is what
+makes the checks evidence rather than decoration; a single pass/fail could not tell you
+*which* claim broke. The CLI exits non-zero on any failure.
 
 ## How this maps to the track
 
@@ -391,21 +400,11 @@ signature from a forged one and every test would pass.
 
 Receipts topic: [`0.0.10413059`](https://hashscan.io/testnet/topic/0.0.10413059)
 
-Two jobs against the same capability, differing only in size:
+Sequence 18 — the receipt shown above — verifies 15/15 from the command line. The browser
+runs fourteen of those: signature verification needs the attestor library, which would be
+megabytes to ship to a page, so `pnpm verify` is the one that checks the fifteenth.
 
-| Job | Steps | Pages | Charged |
-| --- | --- | --- | --- |
-| 3 quotes tagged "love" | 3 | 1 | 312,000 tinybar |
-| 100 quotes, unfiltered | 12 | 10 | 1,572,000 tinybar |
-
-A 5x price difference for 4x the work, settled exactly, on chain. That spread is the
-whole argument for pay-per-job over pay-per-call.
-
-**Sequence 18** is the one to look at if you only look at one: an `oracle.capture_claim`
-job against whitehouse.gov that verifies 15/15, with the fifteenth check being a
-signature from an attestor we do not control.
-
-The same job also settles in an HTS token ([`0.0.10416991`](https://hashscan.io/testnet/token/0.0.10416991),
+Jobs can also settle in an HTS token ([`0.0.10416991`](https://hashscan.io/testnet/token/0.0.10416991),
 "WORK", 2 decimals) at a published rate of 0.001 units per tinybar — so the 312,000-tinybar
 quote becomes 3.12 WORK. An agent holding a stablecoin should not have to hold the
 network's native asset to buy anything.
@@ -441,14 +440,9 @@ paths and does not look for XHR endpoints, which is a real limitation of that sc
 Anyone who watches the network can call it directly, so the moat is thinner than the
 table suggests. That same finding is what makes the zkTLS work above tractable.
 
-The survey is worth running before you trust that table. Its first version reported
-govinfo as API-less, because Node's fetch fails on `api.govinfo.gov` where curl succeeds
-and the code recorded that connection failure as evidence of absence. It now distinguishes
-"checked and absent" from "could not check", and falls back to curl.
-
-That survey also corrected something this README used to claim: `quotes.toscrape.com`
-does have a JSON API at `/api/quotes`, so the login flow demonstrates "not a fetch" but
-not "no API".
+Run the survey yourself before trusting that table — it distinguishes "checked and
+absent" from "could not check", which is the distinction that makes the marks worth
+anything.
 
 ### A real site, not just a sandbox
 
@@ -484,39 +478,6 @@ not to claim the data is otherwise unobtainable. Every genuinely API-less altern
 examined either disallowed crawling outright (`leginfo.legislature.ca.gov` disallows
 everything; `congress.gov` disallows search and 403s plain clients) or blocked
 unauthenticated readers, which is itself a finding about this market.
-
-Verifying the capture job, from public data only:
-
-```
-PASS  Receipt message present and unchunked
-PASS  Submitted by the expected service account
-PASS  Receipt parses at a known schema version                  v=3
-PASS  Result matches the recorded hash
-PASS  Page HTML matches the recorded hash
-PASS  Screenshot matches the recorded hash
-PASS  Retrieval proof is the one the receipt committed to
-PASS  The witnessed response covers the answer sold             www.whitehouse.gov confirmed
-                                                               to have returned "Patriot Day
-                                                               2026, The 25th Anniversary of
-                                                               the Se", which is in the answer
-PASS  Consensus timestamp is coherent with the claimed finish   6720ms after finishedAt
-PASS  Settlement succeeded for exactly the charged amount       321000 tinybar to 0.0.10410493
-PASS  Named paying agent is a net sender in the transaction     0.0.10410543 debited
-PASS  Quote follows the published price book
-PASS  Charged exactly what was quoted
-PASS  Work performed, priced for comparison                     249000 tinybar of work against
-                                                               321000 charged; the plan
-                                                               overestimated and the seller
-                                                               keeps the difference
-PASS  An independent attestor signed this claim                 0x244897572368eadf65bfbc5aec98d8e5443a9072
-
-VERIFIED — 15/15 checks passed
-```
-
-Change one character of the result and the fourth check goes red while the rest stay
-green — which is what makes it evidence rather than decoration. Flip one bit of the
-screenshot and only the screenshot check moves. Flip one bit of the attestor's signature
-and two go red. The verifier exits non-zero on failure.
 
 ## Try it
 
