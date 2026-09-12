@@ -6,6 +6,16 @@ import type { SiteAdapter } from "./types.js";
 
 export { MAX_SOURCES, WorkMeter, type MeterOptions, type StepEvent } from "./meter.js";
 export {
+  checkShape,
+  checkLive,
+  clearRobotsCache,
+  DENYLIST,
+  USER_AGENT,
+  type SourceVerdict,
+} from "./policy/source.js";
+export { blockedReason, asLiteralAddress } from "./policy/addresses.js";
+export { parseRobots, isAllowed, rulesForStatus, type RobotsRules } from "./policy/robots.js";
+export {
   fitToBudget,
   offerFor,
   describeBook,
@@ -30,8 +40,7 @@ export {
   type SiteAdapter,
 } from "./types.js";
 export {
-  ALLOWED_SOURCES,
-  checkSource,
+  EXAMPLE_SOURCES,
   oracleAdapter,
   tidyValues,
   type CapturedClaim,

@@ -223,6 +223,10 @@ export async function startSeller(config: SellerConfig) {
     const asset = assetById.get(assetId);
     if (!asset) throw new Error(`unsupported asset ${assetId}`);
 
+    // Refusals that need a lookup — a host that resolves somewhere private, a path the
+    // site disallows — happen here, so a buyer learns before signing rather than after.
+    if (adapter.precheck) await adapter.precheck(params);
+
     const plan = adapter.plan(params);
     const amount = priceTinybars(
       { steps: plan.steps, pages: plan.pages, sessionMs: plan.estimatedMs },
@@ -389,23 +393,18 @@ export async function startSeller(config: SellerConfig) {
         throw err;
       }
 
-      const plan = adapter.plan(params);
-      const amount = priceTinybars(
-        { steps: plan.steps, pages: plan.pages, sessionMs: plan.estimatedMs },
-        adapter.spec.priceBook,
-      );
-      // Prices are metered in tinybars; a non-HBAR asset converts at its published rate
-      // so a buyer can reproduce the number from the manifest alone.
-      const assetAmount = tinybarToAssetUnits(amount, asset);
-      const quote = quotes.create(
-        capability,
-        params,
-        { steps: plan.steps, pages: plan.pages, estimatedMs: plan.estimatedMs, outline: plan.outline },
-        amount,
-        adapter.spec.priceBook,
-        asset,
-        assetAmount,
-      );
+      // Through `mintQuote`, the same function the A2A endpoint uses. This route used to
+      // price and store quotes itself, which is two implementations of one price.
+      let minted;
+      try {
+        minted = await mintQuote(capability, params, asset.id);
+      } catch (err) {
+        if (err instanceof BadParamsError) {
+          return send(res, 400, { error: "bad_params", message: err.message });
+        }
+        throw err;
+      }
+      const { plan, amount, assetAmount, quote } = minted;
 
       return send(res, 200, {
         jobId: quote.jobId,

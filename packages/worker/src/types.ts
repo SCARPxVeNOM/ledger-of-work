@@ -67,6 +67,17 @@ export interface SiteAdapter<Params, Item> {
   normalise(params: unknown): Params;
   /** Pure. Estimates the work, and therefore the price, without touching the network. */
   plan(params: Params): Plan;
+  /**
+   * Anything that must be checked before a price is committed to, and that needs the
+   * network to check. Optional; most capabilities have nothing to do here.
+   *
+   * Exists because `normalise` is synchronous and some refusals are not knowable without
+   * a lookup — whether a hostname resolves somewhere private, whether a site's robots.txt
+   * permits the path. Those could be left to `run`, and a failed job settles nothing so
+   * nobody is charged either way, but being refused *after* signing a payment is a poor
+   * experience for something knowable a second earlier. Throw `BadParamsError` to refuse.
+   */
+  precheck?(params: Params): Promise<void>;
   /** Pure. Extracts items from one page of HTML. */
   parse(html: string): Item[];
   /** Drives the browser. Every navigation goes through `ctx.meter.step`. */

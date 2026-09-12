@@ -1,73 +1,74 @@
 import { describe, expect, it } from "vitest";
-import { ALLOWED_SOURCES, checkSource, oracleAdapter, tidyValues } from "../src/adapters/oracle.js";
+import { EXAMPLE_SOURCES, oracleAdapter, tidyValues } from "../src/adapters/oracle.js";
+import { checkShape } from "../src/policy/source.js";
 
 /**
- * `checkSource` is the only thing preventing a paid endpoint from pointing a real browser
- * wherever a stranger says. It is exported precisely so it can be tested here rather than
- * only through a live browser run, where the interesting cases would never be exercised.
+ * What the adapter refuses without asking anyone.
+ *
+ * This used to be an allowlist, and an allowlist blocked server-side request forgery for
+ * free — an intranet host simply was not on it. The allowlist is gone, so the refusals
+ * split in two and both halves need testing:
+ *
+ *   - here, the ones knowable from the URL alone: scheme, credentials, literal addresses
+ *   - in `source-policy.test.ts`, the ones needing a lookup: where a name resolves, what
+ *     the site's robots.txt says
+ *
+ * The second half is where `localhost` and `metadata.google.internal` are now caught —
+ * they are hostnames, so nothing about the string itself says they are private, and only
+ * resolving them can tell.
  */
-describe("checkSource — the abuse boundary", () => {
-  const ok = (u: string) => {
-    const r = checkSource(u);
-    expect(r, `expected ${u} to be allowed`).not.toHaveProperty("error");
-    return r as { url: URL };
-  };
-  const rejected = (u: string) => {
-    const r = checkSource(u);
-    expect(r, `expected ${u} to be rejected`).toHaveProperty("error");
-    return (r as { error: string }).error;
+describe("refusals that need no lookup", () => {
+  const ok = (u: string) => expect(checkShape(u), u).toMatchObject({ ok: true });
+  const no = (u: string) => {
+    const r = checkShape(u);
+    expect(r, `expected ${u} to be refused`).toMatchObject({ ok: false });
+    return (r as { ok: false; error: string }).error;
   };
 
-  it("allows a document on a source whose robots.txt was read", () => {
-    expect(ok("https://www.whitehouse.gov/presidential-actions/").url.hostname).toBe(
-      "www.whitehouse.gov",
-    );
-  });
-
-  it("refuses hosts that are not on the list, and says what is", () => {
-    const err = rejected("https://example.com/anything");
-    expect(err).toContain("not an allowed source");
-    expect(err).toContain("www.whitehouse.gov");
-  });
-
-  it("refuses the private targets an open fetcher would otherwise reach", () => {
-    // None of these are on the allowlist, which is the whole point: an allowlist blocks
-    // SSRF by construction rather than by trying to enumerate what is private.
-    for (const u of [
-      "https://169.254.169.254/latest/meta-data/",
-      "https://localhost/admin",
-      "https://127.0.0.1:8787/quote",
-      "https://10.0.0.5/internal",
-      "https://metadata.google.internal/computeMetadata/v1/",
-    ]) {
-      expect(rejected(u)).toContain("not an allowed source");
-    }
-  });
-
-  it("is not fooled by an allowed host in the wrong part of the URL", () => {
-    // Userinfo and subdomain tricks: both parse to a hostname that is not the allowed one.
-    rejected("https://www.whitehouse.gov@evil.example.com/x");
-    rejected("https://www.whitehouse.gov.evil.example.com/x");
-    rejected("https://evil.example.com/?q=https://www.whitehouse.gov/");
+  it("allows an ordinary public document", () => {
+    ok("https://www.whitehouse.gov/presidential-actions/");
+    // And now also a site nobody put on a list, which is the point of the change.
+    ok("https://example.com/some/page");
   });
 
   it("refuses anything but https", () => {
-    expect(rejected("http://www.whitehouse.gov/presidential-actions/")).toContain("https");
-    expect(rejected("file:///etc/passwd")).toContain("https");
-    rejected("not a url at all");
+    expect(no("http://www.whitehouse.gov/presidential-actions/")).toContain("https");
+    expect(no("file:///etc/passwd")).toContain("https");
+    no("not a url at all");
   });
 
-  it("honours the disallowed paths recorded for each source", () => {
-    expect(rejected("https://www.federalregister.gov/documents/search?q=x")).toContain("robots.txt");
-    expect(rejected("https://www.govinfo.gov/search/anything")).toContain("robots.txt");
-    // A document page on the same host is fine — the rule is per-path, not per-host.
-    ok("https://www.federalregister.gov/documents/2026/01/02/some-rule");
+  it("refuses a literal private address outright", () => {
+    no("https://169.254.169.254/latest/meta-data/");
+    no("https://127.0.0.1:8787/quote");
+    no("https://10.0.0.5/internal");
+    no("https://[::1]/admin");
   });
 
-  it("records why every source is on the list", () => {
-    for (const s of ALLOWED_SOURCES) {
+  it("refuses credentials in the URL, which confuse a host check", () => {
+    // `https://www.whitehouse.gov@evil.example/x` has hostname evil.example. Refusing
+    // userinfo outright is simpler than hoping every reader parses it correctly.
+    no("https://www.whitehouse.gov@evil.example/x");
+  });
+
+  it("reads the hostname, not the parts of the URL that merely look like one", () => {
+    // These are now *allowed* by shape — they are ordinary public hosts — and that is
+    // correct. Whether they may be read is decided by their own robots.txt, not by
+    // whether their name resembles someone else's.
+    ok("https://www.whitehouse.gov.evil.example/x");
+    ok("https://evil.example/?q=https://www.whitehouse.gov/");
+  });
+
+  it("says why each example source is worth naming", () => {
+    for (const s of EXAMPLE_SOURCES) {
       expect(s.note.length, `${s.host} has no note`).toBeGreaterThan(20);
     }
+  });
+
+  it("advertises that permission is decided by the site, not by us", () => {
+    // The manifest is what a buying agent reads before paying. It used to list three
+    // allowed hosts; saying that now would be false.
+    expect(oracleAdapter.spec.description).toContain("robots.txt");
+    expect(oracleAdapter.spec.description).not.toContain("Allowed sources");
   });
 });
 
@@ -107,10 +108,22 @@ describe("oracle parameter validation", () => {
     expect(() => oracleAdapter.normalise({ ...base, select: "   " })).toThrow(/select/);
   });
 
-  it("surfaces the source rejection as a parameter error", () => {
-    expect(() => oracleAdapter.normalise({ ...base, url: "https://example.com/" })).toThrow(
-      /not an allowed source/,
+  it("accepts a source nobody put on a list", () => {
+    // The change in one assertion: this used to throw "not an allowed source". Whether
+    // example.com may actually be read is now decided by example.com, at quote time.
+    expect(() => oracleAdapter.normalise({ ...base, url: "https://example.com/" })).not.toThrow();
+  });
+
+  it("still refuses a source that needs no lookup to reject", () => {
+    expect(() => oracleAdapter.normalise({ ...base, url: "https://169.254.169.254/" })).toThrow(
+      /link-local/,
     );
+    expect(() => oracleAdapter.normalise({ ...base, url: "http://example.com/" })).toThrow(/https/);
+  });
+
+  it("has a precheck, because some refusals need the network", () => {
+    // The quote path calls this; without it a buyer would be refused after signing.
+    expect(typeof oracleAdapter.precheck).toBe("function");
   });
 
   it("rejects an attribute that is not an attribute name", () => {

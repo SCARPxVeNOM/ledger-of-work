@@ -1,5 +1,6 @@
 import type { Page } from "playwright";
 import { BadParamsError, type JobContext, type Plan, type SiteAdapter } from "../types.js";
+import { checkLive, checkShape } from "../policy/source.js";
 
 /**
  * Capture a claim from a named source document.
@@ -20,15 +21,22 @@ import { BadParamsError, type JobContext, type Plan, type SiteAdapter } from "..
  * A market names its own resolution source; we do not get to pick it. So unlike the
  * other adapters, the URL, the wait, and the extraction rule are all buyer-supplied.
  *
- * ── Why there is nevertheless an allowlist ──────────────────────────────────────
- * A paid endpoint that will point a real browser at any URL a stranger names is an open
- * proxy, and worse: it will happily fetch a cloud metadata endpoint or an intranet host
- * that only our server can reach. Blocking private addresses by pattern does not fix
- * that, because a hostname can resolve to a private address after the check passes.
- * Until the browser runs somewhere that cannot reach anything private, the honest control
- * is an allowlist of sources whose robots.txt has actually been read. It is published in
- * the spec so a buyer knows before paying, and it is the one thing standing between this
- * capability and being abused.
+ * ── What stops this being an open proxy ─────────────────────────────────────────
+ * A paid endpoint that points a real browser at any URL a stranger names will happily
+ * fetch a cloud metadata endpoint or an intranet host only our server can reach, and hand
+ * back the contents with a receipt attesting to them. This used to be prevented by an
+ * allowlist of three hosts — safe, and not a product, since every new source meant a
+ * person editing code.
+ *
+ * The control is now `policy/source.ts`, and it is two separate things:
+ *
+ *   - **Addresses.** Every address a hostname resolves to is checked against the private,
+ *     loopback, link-local and reserved ranges, and the URL the browser actually lands on
+ *     is checked again — a redirect being the obvious way past a check done once, up front.
+ *   - **Permission.** The site's own robots.txt is fetched, parsed and obeyed per request.
+ *
+ * So the default flipped from "nothing unless a human approved it" to "anything the site
+ * permits", while the protection that matters got stricter rather than looser.
  */
 
 /** Politeness pause after an interaction, so a capture costs the source about what a reader does. */
@@ -47,51 +55,35 @@ const PROOF_MATCH_CHARS = 48;
 
 interface AllowedSource {
   host: string;
-  /** Path prefixes the site's robots.txt disallows. Checked before we navigate. */
-  disallowed: string[];
   /** What it is, and why a market might name it. Published in the manifest. */
   note: string;
 }
 
 /**
- * Sources whose robots.txt was read by hand, on the dates recorded here.
+ * Sources this capability was built against, kept as worked examples.
  *
- * Adding a host to this list is a deliberate act that requires reading its rules first.
- * That is the point: it cannot grow by accident.
+ * These were the allowlist. They are no longer a gate — any public page whose robots.txt
+ * permits it can be captured now, and the gate lives in `policy/source.ts`. They stay
+ * because a capability that takes "any URL" tells a buying agent nothing about what it is
+ * *for*, and these three say it: primary sources that disputes actually turn on.
  */
-export const ALLOWED_SOURCES: AllowedSource[] = [
+export const EXAMPLE_SOURCES: AllowedSource[] = [
   {
     host: "www.whitehouse.gov",
-    // robots.txt read 2026-09-10: `User-agent: *` followed by a bare `Disallow:`, which
-    // permits everything.
-    disallowed: [],
     note: "Presidential Actions — executive orders and proclamations, a primary source markets resolve on.",
   },
   {
     host: "www.federalregister.gov",
-    // robots.txt read 2026-09-10. Its search paths are disallowed; document pages are not.
-    disallowed: [
-      "/documents/current",
-      "/documents/email-a-friend",
-      "/articles/search",
-      "/documents/search",
-      "/public-inspection/search",
-      "/regulations/search",
-      "/my/",
-      "/auth/",
-    ],
     note: "The official daily journal — the authoritative text of a rule, once published.",
   },
   {
     host: "www.govinfo.gov",
-    // Same rules the govinfo adapter already honours.
-    disallowed: ["/search/", "/index.php/search/"],
     note: "GPO's archive of official federal documents.",
   },
 ];
 
 export interface OracleParams {
-  /** The source document to capture. Must be an allowed host over https. */
+  /** The source document to capture. Any https page whose robots.txt permits it. */
   url: string;
   /** CSS selector to wait for before capturing. Null means wait for the load event only. */
   waitFor: string | null;
@@ -109,44 +101,6 @@ export interface CapturedClaim {
   /** Position in document order, so a buyer can say "the first one" unambiguously. */
   rank: number;
   value: string;
-}
-
-/**
- * Pure. Decides whether a URL may be captured, and says why not when it may not.
- *
- * Separated from the adapter and exported because this is the security boundary, and a
- * security boundary that can only be exercised by starting a browser will not be tested
- * against the cases that matter.
- */
-export function checkSource(raw: string): { url: URL } | { error: string } {
-  let url: URL;
-  try {
-    url = new URL(raw);
-  } catch {
-    return { error: "`url` is not a valid absolute URL" };
-  }
-
-  if (url.protocol !== "https:") {
-    return { error: "`url` must use https — a captured claim from a tamperable transport proves nothing" };
-  }
-
-  const source = ALLOWED_SOURCES.find((s) => s.host === url.hostname);
-  if (!source) {
-    return {
-      error:
-        `${url.hostname} is not an allowed source. Allowed: ` +
-        `${ALLOWED_SOURCES.map((s) => s.host).join(", ")}. ` +
-        "Sources are added only after their robots.txt has been read.",
-    };
-  }
-
-  const path = url.pathname;
-  const blocked = source.disallowed.find((prefix) => path.startsWith(prefix));
-  if (blocked) {
-    return { error: `${url.hostname} disallows ${blocked} in robots.txt` };
-  }
-
-  return { url };
 }
 
 /**
@@ -170,16 +124,17 @@ export function tidyValues(raw: string[], max: number): CapturedClaim[] {
 export const oracleAdapter: SiteAdapter<OracleParams, CapturedClaim> = {
   spec: {
     name: "oracle.capture_claim",
-    // `site` is one URL by contract, and the manifest's consumers parse it as one. This
-    // capability spans several, so it names the primary source and the description
-    // carries the full allowed set.
-    site: `https://${(ALLOWED_SOURCES[0] as AllowedSource).host}`,
+    // `site` is one URL by contract and the manifest's consumers parse it as one, so it
+    // names a representative source rather than pretending to name them all.
+    site: `https://${(EXAMPLE_SOURCES[0] as AllowedSource).host}`,
     description:
-      "Capture what a named source document says, with tamper-evident evidence: the extracted value, " +
+      "Capture what a source document says, with tamper-evident evidence: the extracted value, " +
       "the rendered page, a screenshot, and a receipt on Hedera committing to the hash of each. " +
-      "Built for resolving a claim about a primary source — the buyer supplies the URL, an optional " +
-      "interaction, and a CSS extraction rule. Allowed sources: " +
-      `${ALLOWED_SOURCES.map((s) => `${s.host} (${s.note})`).join("; ")}.`,
+      "The buyer supplies the URL, an optional interaction, and a CSS extraction rule. " +
+      "Any public https page may be captured if its robots.txt permits it — the site's own " +
+      "rules are fetched and obeyed per request, and a refusal quotes the rule that caused it. " +
+      "Built for resolving claims about primary sources, for example: " +
+      `${EXAMPLE_SOURCES.map((s) => `${s.host} (${s.note})`).join("; ")}.`,
     priceBook: {
       base: "60000",
       perStep: "45000",
@@ -198,8 +153,11 @@ export const oracleAdapter: SiteAdapter<OracleParams, CapturedClaim> = {
     if (typeof p.url !== "string" || !p.url) {
       throw new BadParamsError("`url` is required — the source document to capture");
     }
-    const checked = checkSource(p.url);
-    if ("error" in checked) throw new BadParamsError(checked.error);
+    // The cheap half of the policy: shape, scheme, denylist, literal private addresses.
+    // The half that needs the network — where the name points and what robots.txt says —
+    // runs in `run`, immediately before the browser is pointed at anything.
+    const checked = checkShape(p.url);
+    if (!checked.ok) throw new BadParamsError(checked.error);
 
     if (typeof p.select !== "string" || !p.select.trim()) {
       throw new BadParamsError("`select` is required — a CSS selector for the value to capture");
@@ -241,6 +199,18 @@ export const oracleAdapter: SiteAdapter<OracleParams, CapturedClaim> = {
    * Pure. The work is a fixed shape, so the quote varies only by whether an interaction
    * was asked for — which is the honest amount of variation a single capture contains.
    */
+  /**
+   * Resolve the host and read the site's rules before quoting.
+   *
+   * The same check runs again in `run`, on the URL the browser actually lands on. This
+   * one exists so a buyer is told "that site disallows this path" before they sign
+   * anything, rather than after.
+   */
+  async precheck(params: OracleParams): Promise<void> {
+    const verdict = await checkLive(new URL(params.url));
+    if (!verdict.ok) throw new BadParamsError(verdict.error);
+  },
+
   plan(params: OracleParams): Plan {
     const steps = params.click ? 3 : 2;
     return {
@@ -301,9 +271,26 @@ export const oracleAdapter: SiteAdapter<OracleParams, CapturedClaim> = {
     const { page, meter } = ctx;
     const host = new URL(params.url).hostname;
 
+    // Resolve the name and read the site's robots.txt before the browser opens anything.
+    // Not billed as a step: it is our own diligence, not work the buyer asked for.
+    const permitted = await checkLive(new URL(params.url));
+    if (!permitted.ok) throw new BadParamsError(permitted.error);
+
     await meter.step(`open ${host}`, async () => {
       await page.goto(params.url, { waitUntil: "domcontentloaded", timeout: 60_000 });
     });
+
+    // Check again on where we actually landed. A redirect is the obvious way past a check
+    // performed only on the URL that was submitted: a public host that 302s to
+    // 169.254.169.254 passes everything above and still ends up reading cloud credentials.
+    const landed = page.url();
+    if (landed !== params.url) {
+      const after = await checkLive(new URL(landed));
+      if (!after.ok) {
+        throw new BadParamsError(`${params.url} redirected to ${landed}, which is refused: ${after.error}`);
+      }
+    }
+
     meter.countPage(params.url);
     ctx.assertWithinLimits();
 
