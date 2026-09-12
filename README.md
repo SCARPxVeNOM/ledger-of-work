@@ -77,6 +77,49 @@ agent as JSON depending on what you ask for:
 
 ![The seller's manifest](docs/screenshots/03-seller-manifest.png)
 
+## Negotiating the work, not the rate
+
+An agent with a budget should not have to guess a job size, ask, and hope. The seller
+answers A2A `message/send` at `/a2a`: say what you want and what you can spend, and it
+accepts, counter-offers, or tells you the floor price so you learn what budget would have
+worked.
+
+```bash
+curl -s -X POST https://seller-production-d5ab.up.railway.app/a2a   -H 'content-type: application/json' -d '{
+    "jsonrpc":"2.0","id":"1","method":"message/send",
+    "params":{"message":{"role":"user","messageId":"m1","parts":[{"kind":"data","data":{
+      "capability":"quotes.search_and_extract",
+      "params":{"max":100},
+      "budgetTinybar":"500000"
+    }}]}}}'
+```
+
+```
+That job costs 1572000 tinybar, over your 500000. For 456000 I can do 20 records
+— same published rate, less work. Accept to take it.
+```
+
+Reply `{"accept":true}` with the `contextId` and you get a run URL whose 402 demands
+exactly the 456,000 agreed — not the 1,572,000 originally asked for.
+
+**What moves is scope. The rate never does.** The price is a pure function of a price book
+published before the job ran, and `Quote follows the published price book` is a check on
+every receipt — so a seller that discounted for a good haggler would produce receipts that
+fail their own audit. A budget short of the asking price is answered with a *smaller job at
+the same rate*, and the buyer decides. Two agents agreeing on the shape of the work is
+negotiation; two agents agreeing to ignore a published rate card is a discount with extra
+steps.
+
+The agent card says so before you start, so nobody wastes a round trip finding out:
+
+```json
+"x-negotiation": { "negotiable": ["scope", "asset"], "fixed": ["rate"] }
+```
+
+`pnpm agent --need quotes --budget 500000` does the whole thing: reads the directory,
+fetches the card, negotiates, **re-prices the counter-offer from the published book to
+check the seller did not quietly move the rate**, pays, and verifies the receipt.
+
 ## Verification is the point
 
 Anyone can check a receipt without an account, without installing anything, and without
@@ -133,7 +176,7 @@ makes the checks evidence rather than decoration; a single pass/fail could not t
 | Extra credit | Where |
 | --- | --- |
 | Metering rather than a flat per-request charge | [How it works](#how-it-works) — priced per step, per page and per second against a published book |
-| A2A / ACP negotiation and settlement | `/.well-known/agent-card.json`, generated from the same specs the seller prices from |
+| A2A negotiation and settlement | `POST /a2a` — `message/send`, scope negotiated against a budget, settled over x402. See [Negotiating](#negotiating-the-work-not-the-rate) |
 | On-chain agent identity — ERC-8004 or HCS-14 | `packages/identity` — HCS-14 UAID, SHA-384 over six canonical fields |
 | Agent discovery via a directory | [topic `0.0.10473320`](https://hashscan.io/testnet/topic/0.0.10473320), open, no submit key |
 | HTS tokens in the settlement path | 4 of the 47 receipts settle in a `WORK` HTS token rather than HBAR |
