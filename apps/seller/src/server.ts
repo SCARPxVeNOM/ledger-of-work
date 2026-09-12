@@ -1,5 +1,11 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { HBAR, priceTinybars, tinybarToAssetUnits, type AssetSpec } from "@low/protocol";
+import {
+  HBAR,
+  RECEIPT_VERSION,
+  priceTinybars,
+  tinybarToAssetUnits,
+  type AssetSpec,
+} from "@low/protocol";
 import { CATALOGUE, BadParamsError, getCapability } from "@low/worker";
 import { ReceiptPublisher } from "@low/receipts";
 import { chromium, type Browser } from "playwright";
@@ -8,6 +14,7 @@ import { FacilitatorClient, type PaymentPayload } from "./facilitator.js";
 import { JobEventRegistry } from "./events.js";
 import { PaymentRejectedError, executeJob } from "./jobs.js";
 import { QuoteStore } from "./quote-store.js";
+import { renderLanding } from "./landing.js";
 
 /**
  * Part of the HCS-14 identifier, so bumping it renames the agent.
@@ -156,7 +163,12 @@ export async function startSeller(config: SellerConfig) {
       topicId: config.topicId,
       submitter: config.sellerAccountId,
       explorer: `https://hashscan.io/testnet/topic/${config.topicId}`,
-      schema: "https://github.com/SCARPxVeNOM/ledger-of-work#receipt-v1",
+      // Stated as a number from the constant rather than baked into the link, which is
+      // how it went stale: this advertised `#receipt-v1` while emitting v3, at an anchor
+      // that had also stopped existing. A buyer reading the manifest to decide which
+      // schema to parse was being told the wrong answer twice.
+      schemaVersion: RECEIPT_VERSION,
+      schema: "https://github.com/SCARPxVeNOM/ledger-of-work#what-the-receipt-proves-and-what-it-does-not",
     },
     capabilities: Object.values(CATALOGUE).map((a) => ({
       name: a.spec.name,
@@ -167,6 +179,35 @@ export async function startSeller(config: SellerConfig) {
       quote: `${base}/jobs`,
     })),
   });
+
+  /**
+   * The rate card, if every capability charges the same.
+   *
+   * Checked rather than assumed. They are identical today — the four price books differ
+   * only in their ceiling — and stating it once is honest where a per-row "from" price
+   * printed the same number four times and implied a choice. If the books ever diverge
+   * this returns undefined on its own and the rows go back to quoting themselves.
+   */
+  const sharedRates = () => {
+    const books = Object.values(CATALOGUE).map((a) => a.spec.priceBook);
+    const [first] = books;
+    if (!first) return undefined;
+    const same = books.every(
+      (b) =>
+        b.base === first.base &&
+        b.perStep === first.perStep &&
+        b.perPage === first.perPage &&
+        b.perSecond === first.perSecond,
+    );
+    return same
+      ? {
+          base: first.base,
+          perStep: first.perStep,
+          perPage: first.perPage,
+          perSecond: first.perSecond,
+        }
+      : undefined;
+  };
 
   const server = createServer(async (req, res) => {
     try {
@@ -186,6 +227,47 @@ export async function startSeller(config: SellerConfig) {
     if (req.method === "OPTIONS") return send(res, 204, null);
 
     if (path === "/" || path === "/.well-known/x402" || path === "/manifest") {
+      // Content negotiation, and only at `/`. The two well-known paths are addressed by
+      // software that went looking for a specific document, so they stay JSON whatever
+      // the Accept header says; `/` is the one a person is liable to open by hand.
+      //
+      // The test is `text/html` appearing *before* any JSON preference, which is what a
+      // browser sends and what an agent does not. A client sending `*/*` — curl, fetch
+      // with no headers, most SDKs — falls through to JSON, so nothing that works today
+      // changes.
+      if (path === "/" && prefersHtml(req.headers.accept)) {
+        const m = manifest();
+        res.statusCode = 200;
+        res.setHeader("content-type", "text/html; charset=utf-8");
+        // Same resource, two representations: say so, or a cache may hand the HTML to an
+        // agent that asked for JSON.
+        res.setHeader("vary", "accept");
+        res.end(
+          renderLanding({
+            name: m.name,
+            description: m.description,
+            uaid,
+            account: config.sellerAccountId,
+            network: config.network,
+            topicId: config.topicId,
+            facilitator: m.payment.facilitator,
+            baseUrl: base,
+            capabilities: Object.values(CATALOGUE).map((a) => ({
+              name: a.spec.name,
+              description: a.spec.description,
+              site: a.spec.site,
+              fromTinybar: priceTinybars(
+                { steps: 1, pages: 1, sessionMs: 1000 },
+                a.spec.priceBook,
+              ),
+              ceilingTinybar: a.spec.priceBook.ceiling,
+            })),
+            sharedRates: sharedRates(),
+          }),
+        );
+        return;
+      }
+      res.setHeader("vary", "accept");
       return send(res, 200, manifest());
     }
 
@@ -452,6 +534,24 @@ export async function startSeller(config: SellerConfig) {
       publisher.close();
     },
   };
+}
+
+/**
+ * Does this client want a page rather than the document?
+ *
+ * Browsers send an Accept list headed by `text/html`; agents send `application/json`, or
+ * `*​/*`, or nothing. So the question is not "is html mentioned" — `*​/*` technically
+ * mentions everything — but "is html asked for ahead of json", which is true of a browser
+ * address bar and false of every programmatic client.
+ */
+export function prefersHtml(accept: string | undefined): boolean {
+  if (!accept) return false;
+  // The q-value and any other parameters are dropped; only the order matters here.
+  const types = accept.split(",").map((t) => (t.split(";")[0] ?? "").trim().toLowerCase());
+  const html = types.indexOf("text/html");
+  if (html === -1) return false;
+  const json = types.findIndex((t) => t === "application/json" || t.endsWith("+json"));
+  return json === -1 || html < json;
 }
 
 function send(res: ServerResponse, status: number, body: unknown): void {
