@@ -1,0 +1,25 @@
+{
+  "capability": "oracle.capture_claim",
+  "params": {
+    "url": "https://www.whitehouse.gov/presidential-actions/",
+    "waitFor": null,
+    "click": null,
+    "select": ".wp-block-post-title",
+    "attribute": null,
+    "max": 3
+  },
+  "items": [
+    {
+      "rank": "1x",
+      "value": "Patriot Day 2026, The 25th Anniversary of the September 11 Terrorist Attacks"
+    },
+    {
+      "rank": 2,
+      "value": "Modifying the Scope of Products of Canada Subject to the Additional Duties Imposed to Offset Canadian Discrimination Against the United States with Respect to Motor Vehicles"
+    },
+    {
+      "rank": 3,
+      "value": "Excluding Certain Canadian Alcoholic Beverages from Importation into the United States in Response to Continued Discrimination Against the Commerce of the United States with Respect to Alcoholic Beverages"
+    }
+  ]
+}

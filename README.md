@@ -95,9 +95,22 @@ Thirteen checks still pass. The payment settled, the price follows the published
 page and screenshot and retrieval proof are all intact. One check fails, and the verdict is
 **VOID**. That is the whole product in two pictures.
 
-Try it yourself on [the verifier](https://verifier-production-0199.up.railway.app) with
-topic `0.0.10413059`, sequence `18`, seller `0.0.10410493`, and `result-proof.json` from
-this repo.
+**Reproduce both verdicts yourself.** Everything needed is committed in
+[`samples/`](samples/) — you do not have to buy a job first. On
+[the verifier](https://verifier-production-0199.up.railway.app), enter:
+
+| Field | Value |
+| --- | --- |
+| Topic id | `0.0.10413059` |
+| Sequence number | `18` |
+| Seller account | `0.0.10410493` |
+| Capability | `oracle.capture_claim` |
+| Result file | `samples/result-proof.json` |
+| The files handed over with it | `samples/result-proof.page.html`, `samples/result-proof.screenshot.png`, `samples/result-proof.proof.json` |
+
+That gives **VERIFIED**. Now swap the result file for
+`samples/result-proof.tampered.json` — the same job with one character changed — and the
+same inputs give **VOID**.
 
 ## How this maps to the track
 

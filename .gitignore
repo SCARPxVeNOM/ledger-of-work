@@ -8,9 +8,14 @@ dist/
 # spike + demo output — never commit results, receipts, or keys
 out/
 *.local.json
+# Job output from local runs. Ignored at the root because it accumulates and is
+# specific to whoever ran it — but `samples/` is committed on purpose: it is the
+# receipt, the files it commits to, and a tampered twin, so anyone can reproduce
+# both verdicts from this repo without buying a job first.
 result*.json
 result*.page.html
 result*.screenshot.png
+!samples/
 receipt*.json
 
 # playwright

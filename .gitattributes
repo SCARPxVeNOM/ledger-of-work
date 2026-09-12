@@ -1,0 +1,16 @@
+# The verification samples are hashed, so their bytes must survive a clone unchanged.
+#
+# Git's default on Windows rewrites LF to CRLF on checkout. For an ordinary source file
+# that is harmless; for these it is fatal. Every one of them is committed to by a SHA-256
+# in an on-chain receipt, so a single rewritten line ending changes the hash and the
+# verifier correctly reports that the result does not match — on a repository whose whole
+# claim is that it does. Someone cloning on Windows would see VOID on an honest receipt
+# and have no way to tell why.
+#
+# `-text` disables end-of-line conversion in both directions and leaves the bytes alone.
+samples/** -text
+
+# Fonts, artwork and screenshots are binary and must never be touched either.
+*.woff2 binary
+*.png binary
+*.webp binary
