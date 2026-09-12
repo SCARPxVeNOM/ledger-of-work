@@ -84,6 +84,63 @@ async function getConnector(): Promise<DAppConnector> {
   return c;
 }
 
+/**
+ * Raised when the relay hangs up because this origin is not on the project's allowlist.
+ *
+ * A WalletConnect project names the origins allowed to use it. If the page is served from
+ * anywhere else the relay accepts the JWT, opens the socket, and then closes it with
+ * `3000 Unauthorized: origin not allowed` — so the credentials are right and the
+ * deployment is wrong, which is a distinction worth putting in front of whoever deployed it.
+ */
+export class OriginNotAllowed extends Error {
+  constructor(origin: string) {
+    super(
+      `WalletConnect is refusing connections from ${origin}. Add this origin to the ` +
+        `project's allowed domains at dashboard.reown.com and try again.`,
+    );
+    this.name = "OriginNotAllowed";
+  }
+}
+
+/**
+ * Watch the relay socket for the one failure the SDK will not report.
+ *
+ * `@walletconnect/core` treats a closed socket as a transient network problem and
+ * reconnects, which is right for a dropped connection and wrong for a rejected origin:
+ * the answer will be identical every time, so it retries until the page is closed while
+ * `connect()` stays pending. Nothing reaches the caller, nothing reaches the console, and
+ * the only outward sign is a button that never stops saying "opening".
+ *
+ * The rejection is only visible on the socket itself, so this wraps `WebSocket` for the
+ * duration of the attempt and puts it back afterwards. Scoped deliberately: a permanent
+ * patch on a global would outlive the thing it exists to diagnose.
+ */
+function watchRelay(): { failed: Promise<never>; stop: () => void } {
+  const Real = window.WebSocket;
+  let reject!: (e: Error) => void;
+  const failed = new Promise<never>((_, r) => (reject = r));
+
+  const Patched = function (this: unknown, url: string | URL, protocols?: string | string[]) {
+    const ws = new Real(url, protocols);
+    if (String(url).includes("relay.walletconnect")) {
+      ws.addEventListener("close", (e: CloseEvent) => {
+        // 3000 is the relay's application-level "I am refusing you". The reason string is
+        // matched too, because 3000 also covers an expired or malformed JWT, and telling
+        // someone to edit their allowlist over a bad token would send them the wrong way.
+        if (e.code === 3000 && /origin not allowed/i.test(e.reason)) {
+          reject(new OriginNotAllowed(location.origin));
+        }
+      });
+    }
+    return ws;
+  } as unknown as typeof WebSocket;
+  Patched.prototype = Real.prototype;
+  Object.assign(Patched, Real);
+
+  window.WebSocket = Patched;
+  return { failed, stop: () => void (window.WebSocket = Real) };
+}
+
 /** Raised when the visitor dismisses the wallet modal. Not a fault; the caller says so. */
 export class WalletCancelled extends Error {
   constructor() {
@@ -111,6 +168,9 @@ export class WalletCancelled extends Error {
  * connection nobody is going to complete should end by itself.
  */
 export async function connectWallet(timeoutMs = 60_000): Promise<Connection> {
+  // Installed before the connector: `init` opens the relay socket, so a rejected origin
+  // is already being retried by the time `openModal` is called.
+  const relay = watchRelay();
   const c = await getConnector();
 
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -124,18 +184,23 @@ export async function connectWallet(timeoutMs = 60_000): Promise<Connection> {
   let session: Awaited<ReturnType<typeof c.openModal>>;
   try {
     trace("openModal: requesting pairing uri");
-    session = await Promise.race([c.openModal(undefined, true), expiry]);
+    session = await Promise.race([c.openModal(undefined, true), relay.failed, expiry]);
     trace("openModal: approved", session.namespaces?.hedera?.accounts);
   } catch (err) {
     trace("openModal: FAILED", (err as Error).message);
+    // A refused origin leaves the cached connector holding a relayer that will go on
+    // retrying a socket it can never keep. Drop it, so that fixing the allowlist and
+    // pressing the button again builds a fresh one rather than rejoining the old loop.
+    if (err instanceof OriginNotAllowed) connector = undefined;
     // The connector words dismissal as a rejected pairing. Rename it, so the caller can
     // tell "they changed their mind" from "something broke".
     if (/rejected pairing/i.test((err as Error).message)) throw new WalletCancelled();
     throw err;
   } finally {
     clearTimeout(timer);
-    // On the timeout path the connector's own `finally` has not run, so the modal would
-    // otherwise be left open over a page that has given up waiting for it.
+    relay.stop();
+    // On the timeout and relay paths the connector's own `finally` has not run, so the
+    // modal would otherwise be left open over a page that has given up waiting for it.
     c.walletConnectModal.closeModal();
   }
 

@@ -612,7 +612,7 @@ export default function App() {
       // real errors teaches people to ignore the red.
       // RelayBlocked already reads as a sentence to a person; the others need framing.
       const err = e as Error;
-      if (err.name === "RelayBlocked") {
+      if (err.name === "OriginNotAllowed") {
         // Only offer the demo wallet where there is one. The hosted demo has none — it
         // holds a key and is bound to loopback — so pointing at it there would be
         // sending the reader after something that does not exist.
