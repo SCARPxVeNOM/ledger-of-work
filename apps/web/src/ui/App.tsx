@@ -131,7 +131,59 @@ const NAV = [
   { href: "#paper", label: "Write-up" },
 ];
 
-function Nav({ wallet, onConnect, busy }: { wallet: string; onConnect: () => void; busy: boolean }) {
+/**
+ * Why the wallet did not connect, said where the wallet was asked for.
+ *
+ * This began life in the page's one shared error banner, which sits under the hero —
+ * about seven hundred pixels below the nav button that causes it. The button reset
+ * itself and nothing appeared to happen, because the explanation was off screen. An
+ * error has to be rendered next to the control that produced it or it may as well not
+ * exist.
+ */
+function WalletNotice({
+  message,
+  onDismiss,
+  className,
+}: {
+  message: string;
+  onDismiss: () => void;
+  className?: string;
+}) {
+  return (
+    <div
+      // `alert` rather than `status`: this interrupts something the reader was actively
+      // trying to do, so a screen reader should say it now rather than when it next pauses.
+      role="alert"
+      className={cx(
+        "rounded-[10px] border border-accent/35 bg-surface p-3.5 text-left shadow-[var(--shadow-lift)]",
+        className,
+      )}
+    >
+      <p className="font-mono text-[11px] leading-[1.55] text-ink-soft">{message}</p>
+      <button
+        type="button"
+        onClick={onDismiss}
+        className="mt-2 font-mono text-[10px] tracking-[0.1em] text-ink-faint uppercase hover:text-ink"
+      >
+        dismiss
+      </button>
+    </div>
+  );
+}
+
+function Nav({
+  wallet,
+  onConnect,
+  busy,
+  error,
+  onDismissError,
+}: {
+  wallet: string;
+  onConnect: () => void;
+  busy: boolean;
+  error: string;
+  onDismissError: () => void;
+}) {
   const [solid, setSolid] = useState(false);
   useEffect(() => {
     const onScroll = () => setSolid(window.scrollY > 16);
@@ -181,9 +233,21 @@ function Nav({ wallet, onConnect, busy }: { wallet: string; onConnect: () => voi
             ))}
           </ul>
 
-          <CTAButton size="sm" variant="ghost" onClick={onConnect} disabled={busy}>
-            <span className="font-mono text-[11.5px]">{wallet}</span>
-          </CTAButton>
+          <div className="relative">
+            <CTAButton size="sm" variant="ghost" onClick={onConnect} disabled={busy}>
+              <span className="font-mono text-[11.5px]">{wallet}</span>
+            </CTAButton>
+
+            {/* Hangs below the button rather than displacing it, so the nav does not
+                change height and shove the whole page down to report a failure. */}
+            {error && (
+              <WalletNotice
+                message={error}
+                onDismiss={onDismissError}
+                className="absolute top-full right-0 z-50 mt-2 w-[320px]"
+              />
+            )}
+          </div>
         </nav>
       </header>
     </>
@@ -465,6 +529,12 @@ export default function App() {
     null,
   );
   const [walletBusy, setWalletBusy] = useState(false);
+  /**
+   * Kept apart from `error`, which belongs to the job. A wallet that will not open is
+   * reported beside the connect button; a job that failed is reported beside the job.
+   * One shared banner meant whichever happened last silently replaced the other.
+   */
+  const [walletError, setWalletError] = useState("");
 
   const esRef = useRef<EventSource | null>(null);
 
@@ -525,7 +595,7 @@ export default function App() {
       : "Connect wallet";
 
   const onConnect = useCallback(async () => {
-    setError("");
+    setWalletError("");
     if (connected) {
       await connected.disconnect();
       setConnected(null);
@@ -542,8 +612,8 @@ export default function App() {
       // real errors teaches people to ignore the red.
       // RelayBlocked already reads as a sentence to a person; the others need framing.
       const err = e as Error;
-      if (err.name === "RelayBlocked") setError(err.message);
-      else if (err.name !== "WalletCancelled") setError(`Could not connect: ${err.message}`);
+      if (err.name === "RelayBlocked") setWalletError(err.message);
+      else if (err.name !== "WalletCancelled") setWalletError(`Could not connect: ${err.message}`);
     } finally {
       setWalletBusy(false);
     }
@@ -715,7 +785,13 @@ export default function App() {
 
   return (
     <>
-      <Nav wallet={walletLabel} onConnect={onConnect} busy={walletBusy} />
+      <Nav
+        wallet={walletLabel}
+        onConnect={onConnect}
+        busy={walletBusy}
+        error={walletError}
+        onDismissError={() => setWalletError("")}
+      />
 
       <main>
         <Hero manifest={manifest} />
@@ -879,6 +955,16 @@ export default function App() {
                         </>
                       )}
                     </p>
+
+                    {/* The other place the wallet is asked for, so the other place the
+                        answer has to appear. */}
+                    {walletError && (
+                      <WalletNotice
+                        message={walletError}
+                        onDismiss={() => setWalletError("")}
+                        className="mt-3"
+                      />
+                    )}
                   </div>
                 )}
               </PaperCard>
