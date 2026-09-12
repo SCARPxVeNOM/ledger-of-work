@@ -17,7 +17,7 @@ facilitator on Hedera testnet.
 | **Service** | [seller-production-d5ab.up.railway.app](https://seller-production-d5ab.up.railway.app) | The x402-gated seller. Returns its manifest as JSON to agents, as a page to browsers. |
 | **Buyer** | [web-production-187614.up.railway.app](https://web-production-187614.up.railway.app) | Order a job, watch the meter, pay from your own wallet. |
 | **Verifier** | [verifier-production-0199.up.railway.app](https://verifier-production-0199.up.railway.app) | Check any receipt against the public mirror node. No account, no install. |
-| **Receipts** | [topic `0.0.10413059`](https://hashscan.io/testnet/topic/0.0.10413059) | 47 real jobs, quoted, paid and recorded on chain. |
+| **Receipts** | [topic `0.0.10413059`](https://hashscan.io/testnet/topic/0.0.10413059) | 48 real jobs, quoted, paid and recorded on chain. |
 | **Directory** | [topic `0.0.10473320`](https://hashscan.io/testnet/topic/0.0.10473320) | An open agent directory with no submit key — anyone may list. |
 
 ## See it charge you, in one command
@@ -116,9 +116,30 @@ The agent card says so before you start, so nobody wastes a round trip finding o
 "x-negotiation": { "negotiable": ["scope", "asset"], "fixed": ["rate"] }
 ```
 
-`pnpm agent --need quotes --budget 500000` does the whole thing: reads the directory,
-fetches the card, negotiates, **re-prices the counter-offer from the published book to
-check the seller did not quietly move the rate**, pays, and verifies the receipt.
+`pnpm agent --need quotes --budget 500000` does the whole thing, and
+[receipt 48](https://hashscan.io/testnet/topic/0.0.10413059) is the one it produced:
+
+```
+3. negotiating — telling it the budget rather than guessing
+  asking for    100 records, budget 500000 tinybar
+  asked cost    1572000 tinybar for 100 records
+  offered       456000 tinybar for 20 records
+  rate check    counter-offer is at the published rate
+  agreed        456000 tinybar
+4. paying the 402
+  items         20
+  charged       456000 tinybar
+  receipt       topic 0.0.10413059 seq 48
+5. verifying the receipt against the ledger
+  PASS  Quote follows the published price book   plan {"pages":2,"steps":4} prices at
+                                                 456000 tinybar, receipt quoted 456000
+  VERIFIED — 12/13 checks
+```
+
+The agent does not take the seller's word for the rate: it re-prices the counter-offer
+from the published book itself and refuses the offer if the two disagree. Then the
+verifier checks the same thing again from the receipt, which is the point — negotiating
+the scope left the audit intact.
 
 ## Verification is the point
 
@@ -169,7 +190,7 @@ makes the checks evidence rather than decoration; a single pass/fail could not t
 | Qualification | Where |
 | --- | --- |
 | Live x402-gated service on Hedera, settled through Blocky402 | [the seller](https://seller-production-d5ab.up.railway.app), `apps/seller` — `/health` reports the facilitator |
-| A platform or agent that consumes it, ≥1 real paid request | 47 paid jobs on [topic `0.0.10413059`](https://hashscan.io/testnet/topic/0.0.10413059); `apps/buyer-cli`, `apps/web`, `scripts/agent-discover-and-buy.mjs` |
+| A platform or agent that consumes it, ≥1 real paid request | 48 paid jobs on [topic `0.0.10413059`](https://hashscan.io/testnet/topic/0.0.10413059); `apps/buyer-cli`, `apps/web`, `scripts/agent-discover-and-buy.mjs` |
 | Public repo with setup, architecture and payment flow | this file — [Try it](#try-it), [How it works](#how-it-works) |
 | Demo video ≤ 5 minutes | [`docs/DEMO.md`](docs/DEMO.md) is the script it follows |
 
@@ -179,7 +200,7 @@ makes the checks evidence rather than decoration; a single pass/fail could not t
 | A2A negotiation and settlement | `POST /a2a` — `message/send`, scope negotiated against a budget, settled over x402. See [Negotiating](#negotiating-the-work-not-the-rate) |
 | On-chain agent identity — ERC-8004 or HCS-14 | `packages/identity` — HCS-14 UAID, SHA-384 over six canonical fields |
 | Agent discovery via a directory | [topic `0.0.10473320`](https://hashscan.io/testnet/topic/0.0.10473320), open, no submit key |
-| HTS tokens in the settlement path | 4 of the 47 receipts settle in a `WORK` HTS token rather than HBAR |
+| HTS tokens in the settlement path | 4 of the 48 receipts settle in a `WORK` HTS token rather than HBAR |
 | Verifiable payment audit trails on HCS | the receipts, and [the verifier](https://verifier-production-0199.up.railway.app) that reads them |
 | Recurring payments via Scheduled Transactions | `scripts/standing-order.mjs` — HIP-423, two executed 37 seconds apart |
 
@@ -188,7 +209,7 @@ makes the checks evidence rather than decoration; a single pass/fail could not t
 Stated here rather than buried, because a project about verifiable claims should be
 checkable about its own.
 
-- **One paying account.** All 47 receipts were paid by `0.0.10410543`, which is ours. The
+- **One paying account.** All 48 receipts were paid by `0.0.10410543`, which is ours. The
   system works; it has not yet been used by a stranger.
 - **A witness, not mathematics.** A retrieval proof says an independent attestor observed
   the TLS session. Compromise the attestor and it is worth what any signature from a
@@ -409,7 +430,7 @@ what it said it would.
 
 ## Status
 
-**Working end to end on Hedera testnet.** Forty-seven real jobs have been quoted, paid
+**Working end to end on Hedera testnet.** Forty-eight real jobs have been quoted, paid
 for through the Blocky402 facilitator, executed against live sites, receipted on HCS and
 independently verified — across five capabilities, four of them settled in an HTS token
 rather than HBAR, four carrying an independent attestor's signature over the source
