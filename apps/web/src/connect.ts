@@ -72,10 +72,13 @@ async function getConnector(): Promise<DAppConnector> {
  */
 export class RelayBlocked extends Error {
   constructor() {
+    // Only the part that is true everywhere. What to do instead depends on what the
+    // page has — the hosted demo has no demo wallet, because that wallet holds a key and
+    // is bound to loopback — so the caller appends the way out it can actually offer.
     super(
       "Your browser cannot reach WalletConnect's relay. An ad or tracker blocker, a " +
-        "privacy extension, or a network filter is usually the cause — allow " +
-        "relay.walletconnect.org, or use the demo wallet instead.",
+        "privacy extension, or a network filter is the usual cause — allowing " +
+        "relay.walletconnect.org normally fixes it.",
     );
     this.name = "RelayBlocked";
   }

@@ -612,12 +612,22 @@ export default function App() {
       // real errors teaches people to ignore the red.
       // RelayBlocked already reads as a sentence to a person; the others need framing.
       const err = e as Error;
-      if (err.name === "RelayBlocked") setWalletError(err.message);
-      else if (err.name !== "WalletCancelled") setWalletError(`Could not connect: ${err.message}`);
+      if (err.name === "RelayBlocked") {
+        // Only offer the demo wallet where there is one. The hosted demo has none — it
+        // holds a key and is bound to loopback — so pointing at it there would be
+        // sending the reader after something that does not exist.
+        setWalletError(
+          demoWallet
+            ? `${err.message} You can also pay from the demo wallet below.`
+            : err.message,
+        );
+      } else if (err.name !== "WalletCancelled") {
+        setWalletError(`Could not connect: ${err.message}`);
+      }
     } finally {
       setWalletBusy(false);
     }
-  }, [connected]);
+  }, [connected, demoWallet]);
 
   const onQuote = useCallback(async () => {
     setError("");
