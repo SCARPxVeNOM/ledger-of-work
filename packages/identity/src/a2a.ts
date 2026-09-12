@@ -8,10 +8,14 @@
  * the same specs the seller prices and executes from makes that impossible.
  *
  * ── What this card does and does not claim ──────────────────────────────────────
- * It is a *discovery* document. It tells another agent what is here, what each thing
- * costs, and how to pay for it — and the payment is x402, not an A2A task. This is not a
- * full A2A server: there is no JSON-RPC `message/send` endpoint behind it, and the card
- * says so in its interfaces rather than implying one.
+ * It is a *discovery* document, and it now points at a negotiation endpoint as well as a
+ * payment one. `message/send` is answered at `/a2a`, in the hybrid shape A2A describes:
+ * messages carry the back-and-forth that settles what the work should be, and the job
+ * itself remains an x402 purchase rather than an A2A task, because the job already has a
+ * lifecycle — quoted, paid, metered over SSE, receipted on chain.
+ *
+ * What is negotiable there is scope, not price. The price is a pure function of a price
+ * book published in this very card, and the verifier checks that the two agree.
  *
  * Served at `/.well-known/agent-card.json`, the path A2A specifies (RFC 8615).
  */
@@ -64,6 +68,17 @@ export function buildAgentCard(input: CardInput): Record<string, unknown> {
 
     interfaces: [
       {
+        // The negotiation endpoint. Listed first because it is where an agent with a
+        // budget should start: it can be told what its money buys before committing.
+        type: "jsonrpc",
+        url: `${input.baseUrl}/a2a`,
+        description:
+          "A2A message/send. Send a data part with {capability, params, budgetTinybar} to " +
+          "open terms; the reply either accepts, counter-offers a smaller scope at the " +
+          "same published rate, or refuses with the floor price. Reply {accept:true} with " +
+          "the contextId to receive a run URL to pay with x402.",
+      },
+      {
         // x402 rather than an A2A task endpoint, stated plainly so a client does not
         // send `message/send` to something that will not answer it.
         type: "x402",
@@ -80,6 +95,19 @@ export function buildAgentCard(input: CardInput): Record<string, unknown> {
     ],
 
     capabilities: { streaming: true, pushNotifications: false, extendedAgentCard: false },
+
+    // Not an A2A field. An agent comparing sellers wants to know what can be moved before
+    // it opens a conversation, and "scope, not price" is a short and checkable answer.
+    "x-negotiation": {
+      endpoint: `${input.baseUrl}/a2a`,
+      method: "message/send",
+      negotiable: ["scope", "asset"],
+      fixed: ["rate"],
+      note:
+        "Prices follow the published price book and are checked by the verifier, so the " +
+        "rate is not negotiable. A budget below the asking price is answered with a " +
+        "smaller job at the same rate.",
+    },
 
     skills: input.capabilities.map((c) => ({
       id: c.name,

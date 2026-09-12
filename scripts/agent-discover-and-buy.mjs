@@ -7,7 +7,7 @@
  *   1. reads the open HCS directory over the public mirror node — no key required
  *   2. picks the cheapest listing whose skills match what it wants
  *   3. fetches that service's A2A agent card to learn how to talk to it
- *   4. asks for a quote, checks it against its own budget
+ *   4. negotiates: states its budget, and takes the counter-offer if the job is too big
  *   5. pays the 402 and takes delivery
  *   6. verifies the receipt against the ledger before trusting the answer
  *
@@ -77,37 +77,117 @@ if (card.id !== pick.entry.listing.uaid) {
   process.exit(1);
 }
 
-// ── 3. quote ──────────────────────────────────────────────────────────────────
-console.log(`\n3. asking for a quote`);
+// ── 3. negotiate ──────────────────────────────────────────────────────────────
+// The interesting case is the one where the answer is "that costs more than you have".
+// Walking away is what this script used to do, and it is a waste of a conversation: the
+// seller can price a smaller version of the same job without touching the network, so
+// asking is free. Scope moves, the rate does not.
+console.log(`
+3. negotiating — telling it the budget rather than guessing`);
 const params =
   need === "oracle"
     ? {
         url: "https://www.whitehouse.gov/presidential-actions/",
         select: ".wp-block-post-title",
-        max: 3,
+        max: 25,
       }
-    : { max: 3 };
+    : { max: 100 };
 
-const quote = await fetch(`${base}/jobs`, {
-  method: "POST",
-  headers: { "content-type": "application/json" },
-  body: JSON.stringify({ capability: pick.skill.id, params }),
-}).then((r) => r.json());
-if (quote.error) {
-  console.error(`quote refused: ${quote.error} ${quote.message ?? ""}`);
-  process.exit(1);
+const a2a = card.interfaces.find((i) => i.type === "jsonrpc")?.url;
+let quote;
+
+if (a2a) {
+  const talk = async (data, contextId) => {
+    const res = await fetch(a2a, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: String(Date.now()),
+        method: "message/send",
+        params: {
+          message: {
+            role: "user",
+            messageId: crypto.randomUUID(),
+            ...(contextId ? { contextId } : {}),
+            parts: [{ kind: "data", data }],
+          },
+        },
+      }),
+    }).then((r) => r.json());
+    if (res.error) throw new Error(res.error.message);
+    const parts = res.result.parts ?? [];
+    return {
+      contextId: res.result.contextId,
+      text: parts.find((p) => p.text)?.text ?? "",
+      data: parts.find((p) => p.data)?.data ?? {},
+    };
+  };
+
+  say("asking for", `${params.max} records, budget ${budget} tinybar`);
+  const opened = await talk({ capability: pick.skill.id, params, budgetTinybar: String(budget) });
+  say("seller says", opened.text);
+
+  if (opened.data.outcome === "rejected") {
+    console.log(`
+  the floor price is ${opened.data.floor.priceTinybar} tinybar — nothing fits ${budget}.`);
+    console.log(`  walking away, having paid nothing and learned the number.`);
+    process.exit(0);
+  }
+
+  if (opened.data.outcome === "counter-offer") {
+    const { asked, offer } = opened.data;
+    say("asked cost", `${asked.priceTinybar} tinybar for ${asked.params.max} records`);
+    say("offered", `${offer.priceTinybar} tinybar for ${offer.params.max} records`);
+    // The seller says it did not move the rate. That is checkable rather than trustworthy:
+    // price the counter-offer from the published book and see if it agrees.
+    const book = opened.data.priceBook;
+    const expected =
+      BigInt(book.base) +
+      BigInt(book.perStep) * BigInt(offer.plan.steps) +
+      BigInt(book.perPage) * BigInt(offer.plan.pages) +
+      BigInt(book.perSecond) * BigInt(Math.ceil(offer.plan.estimatedMs / 1000));
+    const honest = expected === BigInt(offer.priceTinybar);
+    say("rate check", honest ? "counter-offer is at the published rate" : "RATE DOES NOT MATCH THE BOOK");
+    if (!honest) {
+      console.error("\n  the counter-offer is not priced from the published book — refusing it");
+      process.exit(1);
+    }
+  }
+
+  const agreed = await talk({ accept: true }, opened.contextId);
+  say("agreed", `${agreed.data.amount} tinybar`);
+  quote = {
+    run: agreed.data.run,
+    price: { amount: agreed.data.amount },
+    plan: { outline: ["negotiated over A2A"] },
+  };
+} else {
+  // A seller with no negotiation endpoint still sells the old way.
+  say("no /a2a", "falling back to a plain quote");
+  const q = await fetch(`${base}/jobs`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ capability: pick.skill.id, params }),
+  }).then((r) => r.json());
+  if (q.error) {
+    console.error(`quote refused: ${q.error} ${q.message ?? ""}`);
+    process.exit(1);
+  }
+  if (BigInt(q.price.amount) > budget) {
+    console.log(`
+  over budget (${budget}) and nothing to negotiate with — walking away.`);
+    process.exit(0);
+  }
+  quote = q;
 }
 
 const amount = BigInt(quote.price.amount);
-say("quoted", `${amount} tinybar`);
-say("plan", quote.plan.outline.join(" -> "));
-
 if (amount > budget) {
-  console.log(`\n  over budget (${budget}) — walking away without paying. This is the point of`);
-  console.log(`  a price you can read before you commit.`);
-  process.exit(0);
+  console.error(`
+  agreed price ${amount} is over the budget ${budget} — refusing to pay`);
+  process.exit(1);
 }
-say("budget", `${budget} — proceeding`);
 
 // ── 4. pay ────────────────────────────────────────────────────────────────────
 console.log(`\n4. paying the 402`);

@@ -177,11 +177,28 @@ describe("the A2A agent card", () => {
     expect(skills[0]?.tags).toContain("www.whitehouse.gov");
   });
 
-  it("declares x402 rather than implying an A2A task endpoint it does not serve", () => {
+  it("points at both the negotiation endpoint and the way to pay", () => {
+    // This test used to assert the opposite — that no jsonrpc interface was advertised,
+    // because none was served. Now one is, and the card must say so or an agent with a
+    // budget has no way to find it. The x402 interface stays: negotiating settles the
+    // terms, x402 settles the money.
     const interfaces = card.interfaces as Array<Record<string, string>>;
-    expect(interfaces.map((i) => i.type)).toContain("x402");
-    expect(interfaces.every((i) => i.type !== "jsonrpc")).toBe(true);
+    const types = interfaces.map((i) => i.type);
+
+    expect(types).toContain("x402");
+    expect(types).toContain("jsonrpc");
+    expect(interfaces.find((i) => i.type === "jsonrpc")?.url).toMatch(/\/a2a$/);
     expect(Object.keys(card.securitySchemes as object)).toEqual(["x402"]);
+  });
+
+  it("says what is negotiable, and that the rate is not", () => {
+    // An agent comparing sellers should not have to open a conversation to learn that
+    // haggling is off the table here — the price is checked against a published book.
+    const n = card["x-negotiation"] as Record<string, unknown>;
+
+    expect(n.negotiable).toContain("scope");
+    expect(n.fixed).toContain("rate");
+    expect(n.method).toBe("message/send");
   });
 
   it("carries enough Hedera detail to check a receipt before trusting an answer", () => {

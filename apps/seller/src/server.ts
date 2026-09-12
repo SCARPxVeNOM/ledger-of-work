@@ -15,6 +15,7 @@ import { JobEventRegistry } from "./events.js";
 import { PaymentRejectedError, executeJob } from "./jobs.js";
 import { QuoteStore } from "./quote-store.js";
 import { renderLanding } from "./landing.js";
+import { A2AServer } from "./a2a.js";
 
 /**
  * Part of the HCS-14 identifier, so bumping it renames the agent.
@@ -209,6 +210,50 @@ export async function startSeller(config: SellerConfig) {
       : undefined;
   };
 
+  /**
+   * Mint a quote. The single place a price becomes a commitment.
+   *
+   * Shared with the A2A endpoint on purpose: a negotiated job and a directly quoted one
+   * must be the same job, priced by the same code and stored in the same place. Two
+   * paths to a quote would be two price books eventually.
+   */
+  async function mintQuote(capability: string, params: unknown, assetId: string) {
+    const adapter = getCapability(capability);
+    if (!adapter) throw new Error(`unknown capability ${capability}`);
+    const asset = assetById.get(assetId);
+    if (!asset) throw new Error(`unsupported asset ${assetId}`);
+
+    const plan = adapter.plan(params);
+    const amount = priceTinybars(
+      { steps: plan.steps, pages: plan.pages, sessionMs: plan.estimatedMs },
+      adapter.spec.priceBook,
+    );
+    const assetAmount = tinybarToAssetUnits(amount, asset);
+    const quote = quotes.create(
+      capability,
+      params,
+      { steps: plan.steps, pages: plan.pages, estimatedMs: plan.estimatedMs, outline: plan.outline },
+      amount,
+      adapter.spec.priceBook,
+      asset,
+      assetAmount,
+    );
+    return { quote, adapter, asset, plan, amount, assetAmount };
+  }
+
+  const a2a = new A2AServer({
+    assets: [...assetById.keys()],
+    quote: async (capability, params, assetId) => {
+      const { quote, amount } = await mintQuote(capability, params, assetId);
+      return {
+        jobId: quote.jobId,
+        run: `${base}/jobs/${quote.jobId}/run`,
+        amount,
+        expiresAt: quote.expiresAt,
+      };
+    },
+  });
+
   const server = createServer(async (req, res) => {
     try {
       await route(req, res);
@@ -308,6 +353,13 @@ export async function startSeller(config: SellerConfig) {
         topicId: config.topicId,
         openQuotes: quotes.size,
       });
+    }
+
+    // --- negotiate -------------------------------------------------------------
+    // A2A JSON-RPC. Messages until terms are agreed; then a run URL and x402 as usual.
+    if (path === "/a2a" && req.method === "POST") {
+      const body = await readJson(req);
+      return send(res, 200, await a2a.handle(body));
     }
 
     // --- quote -----------------------------------------------------------------
