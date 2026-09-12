@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { OriginNotAllowed } from "../src/connect.js";
+import { OriginNotAllowed } from "../src/relay-watch.js";
 
 /**
  * The refusal the SDK will not tell you about.

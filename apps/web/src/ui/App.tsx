@@ -13,6 +13,7 @@ import {
   SectionLabel,
   cx,
 } from "./primitives.js";
+import { nextOriginRefusal } from "../relay-watch.js";
 import { MeterWidget, type MeterLine } from "./MeterWidget.js";
 import { AgentBar } from "./AgentBar.js";
 import { Art, FloatingArt } from "./Art.js";
@@ -606,7 +607,18 @@ export default function App() {
       // Loaded on click. The connector carries the Hedera SDK and WalletConnect with it —
       // several megabytes nobody who only wants to read a receipt should download.
       const mod = await import("../connect.js");
-      setConnected(await mod.connectWallet());
+      // Raced, not replaced. A refused origin is the one failure the connector cannot
+      // report — it is retried inside WalletConnect forever — so it has to arrive from
+      // beside the call rather than out of it.
+      const refusal = nextOriginRefusal();
+      try {
+        setConnected(await Promise.race([mod.connectWallet(), refusal.refused]));
+      } catch (err) {
+        if ((err as Error).name === "OriginNotAllowed") mod.resetConnector();
+        throw err;
+      } finally {
+        refusal.stop();
+      }
     } catch (e) {
       // Closing the modal is a decision, not a failure. Reporting it in red alongside
       // real errors teaches people to ignore the red.
