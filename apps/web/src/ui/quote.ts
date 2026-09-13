@@ -1,13 +1,19 @@
 /**
- * Refresh a quote this close to lapsing rather than spending it.
+ * Refresh a quote with less than this left rather than spending it.
  *
  * The seller gives a quote five minutes, then deletes the job — from that moment both the
- * run url and the event stream 404. Paying is not instant: the signature goes to a phone
- * and comes back at human speed, and pairing a wallet can spend most of the window before
- * the buyer even presses the button. So a quote that passes this check must still outlive
- * the approval that follows it, not merely be alive right now.
+ * run url and the event stream 404. The margin has to cover everything that happens after
+ * the check, and what happens is a human: the bytes go to a phone, someone unlocks it,
+ * finds the wallet and approves. That is tens of seconds on a good run.
+ *
+ * Two minutes, because the two mistakes do not cost the same. Too small and the quote
+ * passes the check, dies during the approval, and the buyer has signed a payment for a
+ * job that no longer exists — nothing is charged, since the seller 404s before settling
+ * anything, but they approved for nothing and are told only that it failed. Too large and
+ * the page spends one extra request on a quote that would have been fine. Against a
+ * five-minute life this still leaves three minutes to approve in.
  */
-export const QUOTE_REFRESH_MARGIN_MS = 20_000;
+export const QUOTE_REFRESH_MARGIN_MS = 120_000;
 
 /**
  * Is this quote too close to the end of its life to pay against?

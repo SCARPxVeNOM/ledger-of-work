@@ -17,6 +17,12 @@ describe("quoteIsStale", () => {
     expect(quoteIsStale(at(5 * 60_000), NOW)).toBe(false);
   });
 
+  it("refreshes one that cannot survive a phone approval", () => {
+    // The expensive failure: alive at the check, dead by the time the signature returns,
+    // so the buyer approves a payment for a job the seller has already deleted.
+    expect(quoteIsStale(at(60_000), NOW)).toBe(true);
+  });
+
   it("refreshes one that has already lapsed", () => {
     expect(quoteIsStale(at(-1), NOW)).toBe(true);
   });
@@ -38,8 +44,10 @@ describe("quoteIsStale", () => {
     expect(quoteIsStale("whenever", NOW)).toBe(true);
   });
 
-  it("leaves a real margin, not a token one", () => {
-    // A signature round trip through a phone does not fit in a second.
-    expect(QUOTE_REFRESH_MARGIN_MS).toBeGreaterThanOrEqual(10_000);
+  it("leaves room for a human, but not the whole life of the quote", () => {
+    // Unlocking a phone and approving does not fit in a few seconds. Nor may the margin
+    // reach the seller's five-minute life, or every quote would refresh on sight.
+    expect(QUOTE_REFRESH_MARGIN_MS).toBeGreaterThanOrEqual(60_000);
+    expect(QUOTE_REFRESH_MARGIN_MS).toBeLessThan(5 * 60_000);
   });
 });
