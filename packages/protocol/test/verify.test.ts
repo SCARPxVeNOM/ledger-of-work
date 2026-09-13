@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fitReceipt, fitsOneChunk, verifyReceipt } from "../src/verify.js";
+import { assertFitsOneChunk, fitReceipt, fitsOneChunk, verifyReceipt } from "../src/verify.js";
 import { canonicalByteLength } from "../src/canonical.js";
 import { hashCanonical } from "../src/hash.js";
 import { HCS_CHUNK_BYTES, type Receipt } from "../src/types.js";
@@ -542,5 +542,34 @@ describe("a missing price book", () => {
 
     expect(meter?.unchecked).toBeFalsy();
     expect(out.ok).toBe(false);
+  });
+});
+
+describe("a receipt too large to publish", () => {
+  /**
+   * `fitsOneChunk` answers yes or no, which is right for a test and useless to a seller:
+   * by the time a receipt is being written the buyer has paid, and "too big" with no
+   * further detail leaves nothing to do. Naming the largest field makes it a decision.
+   */
+  const oversized = () =>
+    makeReceipt({
+      sources: Array.from({ length: 40 }, (_, i) => `https://example.com/a-fairly-long-path/${i}`),
+    });
+
+  it("throws, naming the size and the limit", () => {
+    expect(() => assertFitsOneChunk(oversized())).toThrow(/1024/);
+  });
+
+  it("names the largest field, so there is something to act on", () => {
+    expect(() => assertFitsOneChunk(oversized())).toThrow(/sources/);
+  });
+
+  it("says nothing about a receipt that fits", () => {
+    expect(() => assertFitsOneChunk(makeReceipt())).not.toThrow();
+  });
+
+  it("agrees with fitsOneChunk, rather than being a second opinion", () => {
+    expect(fitsOneChunk(oversized())).toBe(false);
+    expect(fitsOneChunk(makeReceipt())).toBe(true);
   });
 });

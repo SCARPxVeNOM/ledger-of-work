@@ -1,5 +1,5 @@
 import { isHbar, tinybarToAssetUnits, type AssetSpec } from "./assets.js";
-import { canonical } from "./canonical.js";
+import { canonical, canonicalByteLength } from "./canonical.js";
 import { readEvidence } from "./evidence.js";
 import { consensusTimestampToMillis } from "./hedera.js";
 import { price } from "./price.js";
@@ -407,6 +407,45 @@ export function verifyReceipt(input: VerifyInput): VerifyOutput {
  * chunks from the REST API by hand. Keeping it under the limit is a design constraint, so
  * assert it where receipts are built rather than discovering it in production.
  */
+export class ReceiptTooLarge extends Error {
+  constructor(
+    readonly bytes: number,
+    readonly biggest: string,
+  ) {
+    super(
+      `receipt is ${bytes} bytes and the HCS chunk limit is ${HCS_CHUNK_BYTES}; ` +
+        `\`${biggest}\` is the largest field — drop or shorten it`,
+    );
+    this.name = "ReceiptTooLarge";
+  }
+}
+
+/**
+ * Refuse to build a receipt that cannot be published, and say which field to cut.
+ *
+ * `fitsOneChunk` answers yes or no, which is the right shape for a test and the wrong
+ * shape for a seller. By the time a receipt is being written the buyer has already paid,
+ * and "too big" on its own leaves nothing to do — naming the largest field turns it into
+ * a decision someone can make.
+ *
+ * Reachable from a unit test precisely because the unit and artifact caps exist; without
+ * them the only way to find this is to exceed it in production.
+ */
+export function assertFitsOneChunk(receipt: Receipt): void {
+  if (fitsOneChunk(receipt)) return;
+
+  let biggest = "";
+  let largest = -1;
+  for (const [field, value] of Object.entries(receipt)) {
+    const size = canonicalByteLength(value);
+    if (size > largest) {
+      largest = size;
+      biggest = field;
+    }
+  }
+  throw new ReceiptTooLarge(canonicalByteLength(receipt), biggest);
+}
+
 export function fitsOneChunk(receipt: Receipt): boolean {
   return new TextEncoder().encode(canonical(receipt)).length <= HCS_CHUNK_BYTES;
 }
