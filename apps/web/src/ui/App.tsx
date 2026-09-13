@@ -134,6 +134,90 @@ const NAV = [
 ];
 
 /**
+ * What this is built on, as three drifting rows.
+ *
+ * The space between the hero and the catalogue was empty — a screen of nothing before a
+ * reader reaches anything. A logo wall is the usual answer and we have no logos to show,
+ * so these are the standards and primitives the thing is actually made of. It reads as the
+ * same kind of band and says something true, which a row of borrowed logos would not.
+ *
+ * Every entry is a real dependency or a real property, not a keyword. If one of these ever
+ * stops being true, it should come out of this list.
+ */
+const BUILT_ON: Array<{ label: string; tone: "rail" | "proof" | "hedera" }> = [
+  { label: "x402", tone: "rail" },
+  { label: "exact scheme", tone: "rail" },
+  { label: "Blocky402 facilitator", tone: "rail" },
+  { label: "Hedera Consensus Service", tone: "hedera" },
+  { label: "HCS-14 agent id", tone: "hedera" },
+  { label: "A2A agent card", tone: "rail" },
+  { label: "Mirror node REST", tone: "hedera" },
+
+  { label: "zkTLS retrieval proofs", tone: "proof" },
+  { label: "Reclaim attestor", tone: "proof" },
+  { label: "HTS token settlement", tone: "hedera" },
+  { label: "Scheduled Transactions", tone: "hedera" },
+  { label: "Canonical JSON", tone: "proof" },
+  { label: "SHA-256 commitments", tone: "proof" },
+  { label: "1024-byte receipts", tone: "proof" },
+
+  { label: "Open service directory", tone: "rail" },
+  { label: "robots.txt policy", tone: "proof" },
+  { label: "SSRF address guard", tone: "proof" },
+  { label: "Metered by work", tone: "rail" },
+  { label: "Published price books", tone: "rail" },
+  { label: "Independent verifier", tone: "proof" },
+  { label: "No API keys", tone: "rail" },
+];
+
+const DOT = {
+  rail: "bg-accent",
+  proof: "bg-pass",
+  hedera: "bg-ink-faint",
+} as const;
+
+/** One chip. Bordered and lifted, so it reads as an object rather than floating text. */
+function BuiltOnChip({ label, tone }: { label: string; tone: keyof typeof DOT }) {
+  return (
+    <span className="mx-1.5 inline-flex shrink-0 items-center gap-2 rounded-full border border-line bg-surface px-4 py-2 shadow-[var(--shadow-soft)]">
+      <span aria-hidden className={cx("h-1.5 w-1.5 shrink-0 rounded-full", DOT[tone])} />
+      <span className="font-mono text-[12px] whitespace-nowrap text-ink-soft">{label}</span>
+    </span>
+  );
+}
+
+function BuiltOn() {
+  // Three roughly equal rows, middle one travelling the other way. The alternation is
+  // what stops it reading as one long ribbon that happens to have wrapped.
+  const rows = [BUILT_ON.slice(0, 7), BUILT_ON.slice(7, 14), BUILT_ON.slice(14)];
+
+  return (
+    <section aria-label="What this is built on" className="py-16">
+      <p className="text-center font-mono text-[10px] tracking-[0.18em] text-ink-faint uppercase">
+        Built on, and checked against
+      </p>
+
+      {/* The mask is what makes this a band rather than something clipped by the window:
+          chips fade out at both edges instead of being cut in half. */}
+      <div className="relative mt-8 [mask-image:linear-gradient(to_right,transparent,black_8%,black_92%,transparent)]">
+        {rows.map((row, i) => (
+          <Marquee
+            key={i}
+            reverse={i === 1}
+            pauseOnHover
+            className="[--duration:52s] [--gap:0rem] py-1.5"
+          >
+            {row.map((chip) => (
+              <BuiltOnChip key={chip.label} label={chip.label} tone={chip.tone} />
+            ))}
+          </Marquee>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/**
  * The other two services, which have their own URLs and are otherwise unfindable.
  *
  * The seller and the verifier are separate deployments and a visitor has no way to reach
@@ -1044,6 +1128,7 @@ export default function App() {
 
       <main>
         <Hero manifest={manifest} />
+        <BuiltOn />
 
         {error && (
           <div className="mx-auto max-w-[1180px] px-6 md:px-10">
