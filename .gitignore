@@ -15,6 +15,10 @@ out/
 result*.json
 result*.page.html
 result*.screenshot.png
+# Same, for the two-buyer run, which names its output after the buyer.
+buyer-*.json
+buyer-*.page.html
+buyer-*.screenshot.png
 !samples/
 receipt*.json
 
