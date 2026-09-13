@@ -195,14 +195,26 @@
  * direction was applied to the middle row, and nothing moved. The receipts strip further
  * down the page had never animated either.
  *
- * Declaring `animation` directly means `--duration` is substituted at the element that
- * actually defines it. The fallback covers a marquee that sets no duration at all.
+ * Declaring it here means `--duration` is substituted at the element that actually defines
+ * it. The fallback covers a marquee that sets no duration at all.
+ *
+ * Longhands rather than the `animation` shorthand, and that is not a style preference.
+ * This rule sits outside Tailwind's layers so it wins the cascade — and the shorthand
+ * resets every animation longhand it does not mention, including `animation-direction`.
+ * Using it silently undid `[animation-direction:reverse]` on the reversed row, so all
+ * three travelled the same way and the alternation disappeared.
  */
 .animate-marquee {
-  animation: marquee var(--duration, 40s) linear infinite;
+  animation-name: marquee;
+  animation-duration: var(--duration, 40s);
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
 }
 .animate-marquee-vertical {
-  animation: marquee-vertical var(--duration, 40s) linear infinite;
+  animation-name: marquee-vertical;
+  animation-duration: var(--duration, 40s);
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -217,6 +229,6 @@
   .stamp-in,
   .animate-marquee,
   .animate-marquee-vertical {
-    animation: none;
+    animation-name: none;
   }
 }
