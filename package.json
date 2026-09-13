@@ -32,7 +32,8 @@
     "standing-order": "tsx scripts/standing-order.mjs",
     "agent": "tsx scripts/agent-discover-and-buy.mjs",
     "screenshots": "node scripts/screenshots.mjs",
-    "fonts": "node scripts/vendor-fonts.mjs"
+    "fonts": "node scripts/vendor-fonts.mjs",
+    "toy-adopter": "tsx scripts/toy-adopter.mjs"
   },
   "devDependencies": {
     "@hiero-ledger/sdk": "^2.87.0",

@@ -1,5 +1,9 @@
 # Gate and Relay Implementation Plan
 
+**Status: complete, 2026-09-12.** All five tasks landed. 501 tests pass; receipt 18 still
+verifies 15/15. The relay's HTTP surface and HBAR wallet are deliberately not built — the
+class exists and is tested, and standing it up on the network is a deployment task.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Let a service that is not this one take x402 payment on Hedera and emit a receipt its buyers can verify, by installing a middleware and posting signed receipts to a relay that pays the fees.
@@ -32,7 +36,7 @@
 
 `publish` currently calls `fitReceipt`, which drops source URLs until the receipt fits. That is right for an unsigned receipt — losing a source beats failing a job the buyer paid for — and catastrophic for a signed one, because the signature covers the untrimmed bytes. The receipt would publish and then fail verification for everyone, quietly, only on the oversized ones.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 // packages/receipts/test/publisher-signed.test.ts
@@ -58,12 +62,12 @@ describe("trimming and signatures", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it passes immediately**
+- [x] **Step 2: Run test to verify it passes immediately**
 
 Run: `npx vitest run packages/receipts/test/publisher-signed.test.ts`
 Expected: PASS. This test documents the hazard rather than driving the fix; the fix is driven by the next test.
 
-- [ ] **Step 3: Write the failing test for the guard**
+- [x] **Step 3: Write the failing test for the guard**
 
 ```ts
 // append to packages/receipts/test/publisher-signed.test.ts
@@ -107,12 +111,12 @@ describe("publishing a signed receipt", () => {
 });
 ```
 
-- [ ] **Step 4: Run it and watch it fail**
+- [x] **Step 4: Run it and watch it fail**
 
 Run: `npx vitest run packages/receipts/test/publisher-signed.test.ts`
 Expected: FAIL — `assertNotTrimmedAfterSigning is not exported`
 
-- [ ] **Step 5: Implement**
+- [x] **Step 5: Implement**
 
 In `packages/receipts/src/publisher.ts`:
 
@@ -146,13 +150,13 @@ export function assertNotTrimmedAfterSigning(receipt: Receipt): void {
 
 Call it as the first line of `publish`, before `fitReceipt`.
 
-- [ ] **Step 6: Run tests and the on-chain check**
+- [x] **Step 6: Run tests and the on-chain check**
 
 Run: `npx vitest run` — expected PASS
 Run: `pnpm verify --topic 0.0.10413059 --seq 18 --result ./samples/result-proof.json --capability oracle.capture_claim --submitter 0.0.10410493 --artifacts ./samples/result-proof.page.html,./samples/result-proof.screenshot.png --proof ./samples/result-proof.proof.json`
 Expected: `VERIFIED — 15/15`
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add packages/receipts/src/publisher.ts packages/receipts/test/publisher-signed.test.ts
@@ -184,7 +188,7 @@ export function quoteFor<Out>(config: GateConfig<Out>, req: GateRequest): { unit
 export function decideSettlement<Out>(config: GateConfig<Out>, out: Out): { settle: true } | { settle: false; why: string };
 ```
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 // packages/gate/test/gate.test.ts
@@ -258,11 +262,11 @@ describe("deciding whether to charge", () => {
 });
 ```
 
-- [ ] **Step 2: Run it and watch it fail**
+- [x] **Step 2: Run it and watch it fail**
 
 Run: `npx vitest run packages/gate` — expected FAIL, module not found
 
-- [ ] **Step 3: Create the package**
+- [x] **Step 3: Create the package**
 
 `packages/gate/package.json`:
 ```json
@@ -288,7 +292,7 @@ Run: `npx vitest run packages/gate` — expected FAIL, module not found
 }
 ```
 
-- [ ] **Step 4: Implement**
+- [x] **Step 4: Implement**
 
 ```ts
 // packages/gate/src/gate.ts
@@ -352,11 +356,11 @@ export function decideSettlement<Out>(
 export { decideSettlement, quoteFor, type GateConfig, type GateRequest } from "./gate.js";
 ```
 
-- [ ] **Step 5: Run tests**
+- [x] **Step 5: Run tests**
 
 Run: `npx vitest run packages/gate` — expected PASS, 7 tests
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add packages/gate
@@ -376,7 +380,7 @@ git commit -m "A gate that prices before the work and refuses to charge for noth
 - Consumes: `quoteFor`, `decideSettlement` from Task 2; `signReceipt`, `assertFitsOneChunk`, `RECEIPT_VERSION` from `@low/protocol`.
 - Produces: `buildReceipt<Out>(config, args): Receipt` where `args` is `{ jobId, units, work, out, amount, charged, payer, payTo, network, asset, startedAt, finishedAt, status, identity }`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 // packages/gate/test/receipt.test.ts
@@ -463,11 +467,11 @@ describe("building a receipt from what happened", () => {
 });
 ```
 
-- [ ] **Step 2: Run it and watch it fail**
+- [x] **Step 2: Run it and watch it fail**
 
 Run: `npx vitest run packages/gate/test/receipt.test.ts` — expected FAIL, module not found
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 ```ts
 // packages/gate/src/receipt.ts
@@ -546,11 +550,11 @@ export function buildReceipt<Out>(config: GateConfig<Out>, args: BuildArgs<Out>)
 }
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run: `npx vitest run packages/gate` — expected PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/gate
@@ -569,7 +573,7 @@ git commit -m "Build the receipt, check it fits, then sign it"
 - Consumes: `verifySignature`, `assertFitsOneChunk` from `@low/protocol`; `resolveSigner` from `@low/receipts`.
 - Produces: `class Relay { accept(receipt: Receipt): Promise<{ ok: true; topic: string } | { ok: false; error: string }> }`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 // apps/relay/test/relay.test.ts
@@ -692,11 +696,11 @@ describe("accepting a receipt", () => {
 });
 ```
 
-- [ ] **Step 2: Run it and watch it fail**
+- [x] **Step 2: Run it and watch it fail**
 
 Run: `npx vitest run apps/relay` — expected FAIL, module not found
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 ```ts
 // apps/relay/src/relay.ts
@@ -761,11 +765,11 @@ export class Relay {
 }
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run: `npx vitest run apps/relay` — expected PASS, 7 tests
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/relay
@@ -782,7 +786,7 @@ git commit -m "A relay that submits what it cannot forge"
 
 **Interfaces:** consumes everything above.
 
-- [ ] **Step 1: Write the toy adopter**
+- [x] **Step 1: Write the toy adopter**
 
 ```js
 // scripts/toy-adopter.mjs
@@ -847,7 +851,7 @@ createServer(async (req, res) => {
 }).listen(8410, () => console.log("toy adopter on :8410 — POST {\"text\":\"...\"}"));
 ```
 
-- [ ] **Step 2: Run it and buy from it**
+- [x] **Step 2: Run it and buy from it**
 
 ```bash
 node scripts/toy-adopter.mjs &
@@ -855,7 +859,7 @@ curl -s -X POST localhost:8410 -H 'content-type: application/json' -d '{"text":"
 ```
 Expected: JSON with `quote.amount` of `"1025"` (base 1000 + 5 tokens at 5), a receipt at `v: 4` with `work: {tokens: 5}`, `evidence.output` a `sha256:` hash, and a `sig`.
 
-- [ ] **Step 3: Verify the signature independently**
+- [x] **Step 3: Verify the signature independently**
 
 ```bash
 curl -s -X POST localhost:8410 -H 'content-type: application/json' -d '{"text":"one two three"}' > /tmp/toy.json
@@ -870,14 +874,14 @@ console.log('signature verifies:', verifySignature(receipt, (b,s) => verify(null
 ```
 Expected: `signature verifies: true`
 
-- [ ] **Step 4: Confirm the empty case charges nothing**
+- [x] **Step 4: Confirm the empty case charges nothing**
 
 ```bash
 curl -s -X POST localhost:8410 -H 'content-type: application/json' -d '{"text":""}' | grep -E '"charged"|"status"'
 ```
 Expected: `"charged": "0"` and `"status": "failed"`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add scripts/toy-adopter.mjs
