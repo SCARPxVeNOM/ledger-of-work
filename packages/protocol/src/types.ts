@@ -94,13 +94,24 @@ export interface PaymentRef {
  * artifacts, can re-hash them, and can *look* at the screenshot to see whether it shows
  * the claim. Proving retrieval itself needs zkTLS; see the README.
  */
+/**
+ * Named commitments to the files handed over with the answer.
+ *
+ * A map rather than fixed fields from v4, so a service that produces an output file and a
+ * log can commit to both without pretending either is a screenshot. Capped at four names
+ * of twelve characters — see `units.ts` for why that ceiling is not tidiness.
+ *
+ * v2 and v3 also keep `finalUrl` and `capturedAt` in here, neither of which is a hash.
+ * `readEvidence` separates them out; nothing should reach into this map directly.
+ */
 export interface EvidenceRef {
+  [name: string]: string | undefined;
   /** `sha256:<hex>` over the fully rendered HTML. */
-  pageHash: string;
+  pageHash?: string;
   /** `sha256:<hex>` over the full-page PNG. */
-  screenshotHash: string;
-  /** Where the browser actually ended up, which may differ from where it was sent. */
-  finalUrl: string;
+  screenshotHash?: string;
+  /** Where the browser ended up. v2 and v3 only; from v4 it is a field on the receipt. */
+  finalUrl?: string;
   /**
    * When the page was captured. Dropped from v3 onward: it was always within a few
    * milliseconds of `finishedAt`, which the receipt already carries, and at v3 the
@@ -190,6 +201,13 @@ export interface Receipt {
    * fine — see `RetrievalRef`.
    */
   retrieval?: RetrievalRef;
+  /**
+   * Where the capture actually ended up, which may differ from where it was sent.
+   *
+   * Lived inside `evidence` on v2 and v3, which was wrong: evidence is commitments to
+   * files, and this is a URL. `readEvidence` reads either placement.
+   */
+  finalUrl?: string;
   status: JobStatus;
 }
 

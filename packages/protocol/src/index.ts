@@ -8,6 +8,15 @@ export {
 } from "./assets.js";
 export { canonical, canonicalByteLength } from "./canonical.js";
 export { hashCanonical, sha256 } from "./hash.js";
+export { readEvidence, type ReadEvidence } from "./evidence.js";
+export {
+  assertValidUnits,
+  MAX_UNITS,
+  MAX_UNIT_NAME,
+  RESERVED_ARTIFACTS,
+  RESERVED_UNITS,
+  UnitError,
+} from "./units.js";
 export {
   TINYBAR_PER_HBAR,
   consensusTimestampToMillis,

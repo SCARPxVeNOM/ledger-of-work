@@ -1,5 +1,6 @@
 import { isHbar, tinybarToAssetUnits, type AssetSpec } from "./assets.js";
 import { canonical } from "./canonical.js";
+import { readEvidence } from "./evidence.js";
 import { consensusTimestampToMillis } from "./hedera.js";
 import { price } from "./price.js";
 import {
@@ -52,6 +53,12 @@ export interface VerifyInput {
    */
   pageHash?: string | undefined;
   screenshotHash?: string | undefined;
+  /**
+   * Artifacts by the names the receipt used, for receipts that commit to more than a
+   * page and a screenshot. `pageHash` and `screenshotHash` above are the older way of
+   * saying the same thing and still work; where both are given, they win.
+   */
+  artifacts?: Record<string, string> | undefined;
   /**
    * `sha256:<hex>` over the retrieval proof the buyer received, hashed by the caller for
    * the same reason `resultHash` is.
@@ -175,17 +182,29 @@ export function verifyReceipt(input: VerifyInput): VerifyOutput {
   // Reported as three states, never two: matched, mismatched, or not checkable. A
   // receipt that carries no evidence is not thereby fine — it is unproven, and saying so
   // is the difference between a verifier and a rubber stamp.
-  if (receipt.evidence) {
-    const pair: Array<[string, string, string | undefined, string]> = [
-      ["page", "Page HTML matches the recorded hash", input.pageHash, receipt.evidence.pageHash],
-      [
-        "screenshot",
-        "Screenshot matches the recorded hash",
-        input.screenshotHash,
-        receipt.evidence.screenshotHash,
-      ],
-    ];
-    for (const [id, label, supplied, recorded] of pair) {
+  const committed = readEvidence(receipt).artifacts;
+  if (Object.keys(committed).length > 0) {
+    // Whatever the receipt committed to, by the names it used. Two of those names are
+    // older than the rest and keep their wording, so a reader who has seen this output
+    // before still recognises it.
+    const supplied: Record<string, string | undefined> = {
+      ...input.artifacts,
+      ...(input.pageHash === undefined ? {} : { pageHash: input.pageHash }),
+      ...(input.screenshotHash === undefined ? {} : { screenshotHash: input.screenshotHash }),
+    };
+    const LABELS: Record<string, [string, string]> = {
+      pageHash: ["page", "Page HTML matches the recorded hash"],
+      screenshotHash: ["screenshot", "Screenshot matches the recorded hash"],
+    };
+
+    const rows: Array<[string, string, string | undefined, string]> = Object.entries(committed).map(
+      ([name, hash]) => {
+        const [id, label] = LABELS[name] ?? [name, `\`${name}\` matches the recorded hash`];
+        return [id, label, supplied[name], hash];
+      },
+    );
+
+    for (const [id, label, supplied, recorded] of rows) {
       if (supplied === undefined) {
         cannotCheck(id, label, `not checked — supply the artifact to compare against ${recorded}`);
       } else {
