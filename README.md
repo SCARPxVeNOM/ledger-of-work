@@ -208,6 +208,10 @@ the receipt committed to, and the signature no longer verifies. That independenc
 makes the checks evidence rather than decoration; a single pass/fail could not tell you
 *which* claim broke. The CLI exits non-zero on any failure.
 
+Every screenshot above is taken from the deployed services by `pnpm screenshots`, not
+hand-cropped — so they can be retaken after a redesign, and so a reader can check the
+pictures are of the real thing.
+
 ## How this maps to the track
 
 | Qualification | Where |

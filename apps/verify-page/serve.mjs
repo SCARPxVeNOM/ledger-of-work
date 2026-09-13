@@ -1,5 +1,5 @@
 /**
- * Serve the built verifier, with the same headers `vercel.json` declares.
+ * Serve the built verifier, and set the headers that make it worth trusting.
  *
  * Small on purpose. This page is the trust anchor — the thing a sceptic runs when they
  * assume we are lying — so what stands between them and the files should be short enough

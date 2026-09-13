@@ -14,7 +14,6 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --build",
-    "spike:supported": "node scripts/supported.mjs",
     "spike:pay": "node scripts/spike-pay.mjs",
     "spike:hcs": "node scripts/spike-hcs.mjs",
     "seller": "tsx apps/seller/src/main.ts",
@@ -33,7 +32,9 @@
     "deploy:railway": "node scripts/deploy-railway.mjs",
     "registry": "tsx scripts/registry.mjs",
     "standing-order": "tsx scripts/standing-order.mjs",
-    "agent": "tsx scripts/agent-discover-and-buy.mjs"
+    "agent": "tsx scripts/agent-discover-and-buy.mjs",
+    "screenshots": "node scripts/screenshots.mjs",
+    "fonts": "node scripts/vendor-fonts.mjs"
   },
   "devDependencies": {
     "@hiero-ledger/sdk": "^2.87.0",

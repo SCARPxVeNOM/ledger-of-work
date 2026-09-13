@@ -8,6 +8,9 @@ import type { RetrievalProof } from "../src/portable.js";
  * A real proof, obtained from the public Reclaim attestor on 2026-09-09 for a live GET of
  * whitehouse.gov's Presidential Actions listing.
  *
+ * Regenerate with `node scripts/spike-zktls-oracle.mjs`, which writes a fresh proof to
+ * `.data/zktls-oracle-proof.json`; this file is a copy of one such run.
+ *
  * A hand-built fixture would be worthless here. The thing under test is whether we can
  * tell a genuine attestor signature from a tampered one, and a fake proof cannot exercise
  * that — it would fail every check for the wrong reason and every test would pass.

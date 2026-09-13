@@ -5,8 +5,8 @@ services rather than one. The verifier is the one worth hosting first.
 
 | Service | Config | Holds a key | Public route |
 | --- | --- | --- | --- |
-| verifier | `railway.verify.toml` / `vercel.json` | no | yes |
-| seller | `railway.toml` | the seller's | yes |
+| verifier | `railway.verify.toml` | no | yes |
+| seller | `railway.seller.toml` | the seller's | yes |
 | demo UI | `railway.web.toml` | no | yes |
 | demo wallet | `railway.wallet.toml` | **a funded one** | **no** |
 
@@ -66,30 +66,6 @@ ceremonial: the page embeds published price books, and if those ever drift from 
 seller actually charges, the meter check would verify against a price nobody paid. A test
 catches that, and it runs before anything ships.
 
-### Vercel
-
-`vercel.json` at the repo root is already configured for this — build command, output
-directory, and headers. Point Vercel at the repository root, not at `apps/verify-page`:
-the build runs from the workspace root because the page imports `@low/protocol` and
-`@low/worker` as workspace packages.
-
-```bash
-vercel            # preview
-vercel --prod     # production
-```
-
-Two settings in that file are worth knowing about rather than discovering:
-
-- **`--prod=false` on the install.** Vercel sets `NODE_ENV=production` for builds, and
-  the bundler (`esbuild`) is a devDependency. pnpm 10 does not currently prune on
-  `NODE_ENV`, so this changes nothing today — it is there so a pnpm upgrade or an
-  injected `--prod` cannot turn the build into a "cannot find package esbuild" failure.
-- **A restrictive CSP**, because this page is the trust anchor and should be hard to
-  turn into a lying one. Everything is `'self'` except `connect-src https:`, which is
-  deliberately not pinned to our mirror node — the page lets a sceptic point it at
-  *theirs*, and pinning ours would defeat the purpose of a verifier nobody is supposed to
-  trust.
-
 ### Anywhere else
 
 The output is plain files, and they are genuinely self-contained: fonts are vendored
@@ -138,7 +114,7 @@ hand.
 
 ### Railway
 
-`railway.toml` at the repo root configures the build, the health check and the replica
+`railway.seller.toml` configures the build, the health check and the replica
 count. Railway picks it up automatically.
 
 ```bash
@@ -157,7 +133,7 @@ Then, by hand in the dashboard — neither can be set from the file:
    for a job the seller no longer recognises; and the ~26 MB of zero-knowledge circuits
    are re-downloaded on the first proof.
 
-`numReplicas` is pinned to 1 in `railway.toml`, and that is a correctness constraint
+`numReplicas` is pinned to 1 in `railway.seller.toml`, and that is a correctness constraint
 rather than a cost one — the reasoning is in the file. Raising it needs the quote store
 moved somewhere shared first.
 
