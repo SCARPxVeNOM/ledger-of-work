@@ -154,7 +154,8 @@ const server = createServer(async (req, res) => {
       path === "/app.css" ||
       path === "/app.js" ||
       /^\/fonts\/[\w.-]+\.(woff2|txt)$/.test(path) ||
-      /^\/art\/[\w.-]+\.webp$/.test(path)
+      /^\/art\/[\w.-]+\.webp$/.test(path) ||
+      /^\/marks\/[\w.-]+\.svg$/.test(path)
     ) {
       try {
         const file = readFileSync(join(HERE, "..", "public", path.replace(/^\//, "")));
@@ -166,6 +167,8 @@ const server = createServer(async (req, res) => {
               ? "font/woff2"
               : path.endsWith(".webp")
                 ? "image/webp"
+                : path.endsWith(".svg")
+                  ? "image/svg+xml"
                 : "text/plain; charset=utf-8";
         // Fonts and artwork carry their size in the filename, so a changed file is a
         // changed URL and a year is safe. The bundles keep one name across every deploy,

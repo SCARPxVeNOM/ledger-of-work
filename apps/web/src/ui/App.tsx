@@ -144,30 +144,39 @@ const NAV = [
  * Every entry is a real dependency or a real property, not a keyword. If one of these ever
  * stops being true, it should come out of this list.
  */
-const BUILT_ON: Array<{ label: string; tone: "rail" | "proof" | "hedera" }> = [
+const BUILT_ON: Array<{ label: string; tone: "rail" | "proof" | "hedera"; mark?: string }> = [
+  // The rails. None of these have a mark, because a protocol is not a company.
   { label: "x402", tone: "rail" },
   { label: "exact scheme", tone: "rail" },
   { label: "Blocky402 facilitator", tone: "rail" },
-  { label: "Hedera Consensus Service", tone: "hedera" },
-  { label: "HCS-14 agent id", tone: "hedera" },
   { label: "A2A agent card", tone: "rail" },
-  { label: "Mirror node REST", tone: "hedera" },
-
-  { label: "zkTLS retrieval proofs", tone: "proof" },
-  { label: "Reclaim attestor", tone: "proof" },
-  { label: "HTS token settlement", tone: "hedera" },
-  { label: "Scheduled Transactions", tone: "hedera" },
-  { label: "Canonical JSON", tone: "proof" },
-  { label: "SHA-256 commitments", tone: "proof" },
-  { label: "1024-byte receipts", tone: "proof" },
-
   { label: "Open service directory", tone: "rail" },
-  { label: "robots.txt policy", tone: "proof" },
-  { label: "SSRF address guard", tone: "proof" },
   { label: "Metered by work", tone: "rail" },
   { label: "Published price books", tone: "rail" },
-  { label: "Independent verifier", tone: "proof" },
   { label: "No API keys", tone: "rail" },
+  { label: "Independent verifier", tone: "proof" },
+
+  // The chain, and what is committed to it.
+  { label: "Hedera Consensus Service", tone: "hedera", mark: "hedera" },
+  { label: "HCS-14 agent id", tone: "hedera", mark: "hedera" },
+  { label: "HTS token settlement", tone: "hedera", mark: "hedera" },
+  { label: "Scheduled Transactions", tone: "hedera", mark: "hedera" },
+  { label: "Mirror node REST", tone: "hedera", mark: "hedera" },
+  { label: "zkTLS retrieval proofs", tone: "proof" },
+  { label: "Reclaim attestor", tone: "proof" },
+  { label: "SHA-256 commitments", tone: "proof" },
+  { label: "Canonical JSON", tone: "proof" },
+
+  // What it is written with, and the guards around it.
+  { label: "TypeScript", tone: "rail", mark: "typescript" },
+  { label: "Node.js", tone: "rail", mark: "nodedotjs" },
+  { label: "React", tone: "rail", mark: "react" },
+  { label: "Vitest", tone: "proof", mark: "vitest" },
+  { label: "pnpm", tone: "rail", mark: "pnpm" },
+  { label: "Railway", tone: "rail", mark: "railway" },
+  { label: "robots.txt policy", tone: "proof" },
+  { label: "SSRF address guard", tone: "proof" },
+  { label: "1024-byte receipts", tone: "proof" },
 ];
 
 const DOT = {
@@ -176,43 +185,123 @@ const DOT = {
   hedera: "bg-ink-faint",
 } as const;
 
-/** One chip. Bordered and lifted, so it reads as an object rather than floating text. */
-function BuiltOnChip({ label, tone }: { label: string; tone: keyof typeof DOT }) {
+/**
+ * One chip.
+ *
+ * Bordered, surfaced and lifted, so it reads as an object rather than text floating over
+ * the page — which is the whole difference between this and a list of keywords. It lifts
+ * further on hover, which with `pauseOnHover` on the row means a reader who stops the band
+ * to read something gets an acknowledgement that they have.
+ */
+function BuiltOnChip({
+  label,
+  tone,
+  mark,
+}: {
+  label: string;
+  tone: keyof typeof DOT;
+  mark?: string | undefined;
+}) {
   return (
-    <span className="mx-1.5 inline-flex shrink-0 items-center gap-2 rounded-full border border-line bg-surface px-4 py-2 shadow-[var(--shadow-soft)]">
-      <span aria-hidden className={cx("h-1.5 w-1.5 shrink-0 rounded-full", DOT[tone])} />
-      <span className="font-mono text-[12px] whitespace-nowrap text-ink-soft">{label}</span>
+    <span
+      className={cx(
+        "group/chip inline-flex shrink-0 items-center gap-2 rounded-full border border-line",
+        "bg-surface px-4 py-2 shadow-[var(--shadow-soft)] transition-all duration-200",
+        "hover:-translate-y-0.5 hover:border-line-strong hover:shadow-[var(--shadow-lift)]",
+      )}
+    >
+      {/* A real mark where one exists, and a coloured dot where it does not — because a
+          protocol is not a company and inventing a logo for `x402` would be worse than
+          the dot. Self-hosted rather than fetched from a CDN: every font on this site is
+          local for the same reason, and a page arguing you need not trust anyone should
+          not phone a third party to render itself. */}
+      {mark ? (
+        <img
+          src={`/marks/${mark}.svg`}
+          alt=""
+          width={14}
+          height={14}
+          loading="lazy"
+          decoding="async"
+          className="h-3.5 w-3.5 shrink-0 opacity-70 transition-opacity duration-200 group-hover/chip:opacity-100"
+        />
+      ) : (
+        <span
+          aria-hidden
+          className={cx(
+            "h-1.5 w-1.5 shrink-0 rounded-full transition-transform duration-200",
+            "group-hover/chip:scale-150",
+            DOT[tone],
+          )}
+        />
+      )}
+      <span className="font-mono text-[12px] whitespace-nowrap text-ink-soft transition-colors group-hover/chip:text-ink">
+        {label}
+      </span>
     </span>
   );
 }
 
+/**
+ * Three rows, the middle one travelling the other way.
+ *
+ * `reverse` is Magic UI's own prop and the alternation is the point: three rows all going
+ * the same way read as one long ribbon that happened to wrap, and the eye follows it off
+ * the edge. Alternating gives the band a centre.
+ *
+ * The three durations are deliberately not equal. Rows at identical speeds stay in lockstep
+ * and the whole thing moves like a single object; a few seconds of difference is enough for
+ * them to drift apart and read as three.
+ */
 function BuiltOn() {
-  // Three roughly equal rows, middle one travelling the other way. The alternation is
-  // what stops it reading as one long ribbon that happens to have wrapped.
-  const rows = [BUILT_ON.slice(0, 7), BUILT_ON.slice(7, 14), BUILT_ON.slice(14)];
+  const rows = [
+    { chips: BUILT_ON.slice(0, 9), duration: "58s", reverse: false },
+    { chips: BUILT_ON.slice(9, 18), duration: "72s", reverse: true },
+    { chips: BUILT_ON.slice(18), duration: "64s", reverse: false },
+  ];
 
   return (
-    <section aria-label="What this is built on" className="py-16">
+    <section
+      aria-label="What this is built on"
+      // Hairlines and a sunk ground so this reads as a band the page contains, rather than
+      // chips floating on the same surface as everything above and below them.
+      className="border-y border-line bg-surface-sunk/40 py-14"
+    >
       <p className="text-center font-mono text-[10px] tracking-[0.18em] text-ink-faint uppercase">
         Built on, and checked against
       </p>
 
-      {/* The mask is what makes this a band rather than something clipped by the window:
-          chips fade out at both edges instead of being cut in half. */}
-      <div className="relative mt-8 [mask-image:linear-gradient(to_right,transparent,black_8%,black_92%,transparent)]">
-        {rows.map((row, i) => (
+      {/* The mask is most of what separates a designed band from a clipped one: chips fade
+          out at both edges instead of being sliced in half by the window. */}
+      <div className="relative mt-7 [mask-image:linear-gradient(to_right,transparent,black_10%,black_90%,transparent)]">
+        {rows.map((row) => (
           <Marquee
-            key={i}
-            reverse={i === 1}
+            key={row.duration}
+            reverse={row.reverse}
             pauseOnHover
-            className="[--duration:52s] [--gap:0rem] py-1.5"
+            className="py-2 [--gap:0.75rem]"
+            style={{ "--duration": row.duration } as React.CSSProperties}
           >
-            {row.map((chip) => (
-              <BuiltOnChip key={chip.label} label={chip.label} tone={chip.tone} />
+            {row.chips.map((chip) => (
+              <BuiltOnChip key={chip.label} label={chip.label} tone={chip.tone} mark={chip.mark} />
             ))}
           </Marquee>
         ))}
       </div>
+
+      <p className="mt-7 text-center font-mono text-[10.5px] text-ink-faint">
+        <span className="inline-flex items-center gap-1.5">
+          <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-accent" /> payment rail
+        </span>
+        <span className="mx-3 text-line-strong">·</span>
+        <span className="inline-flex items-center gap-1.5">
+          <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-pass" /> proof
+        </span>
+        <span className="mx-3 text-line-strong">·</span>
+        <span className="inline-flex items-center gap-1.5">
+          <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-ink-faint" /> Hedera
+        </span>
+      </p>
     </section>
   );
 }
