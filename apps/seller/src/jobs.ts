@@ -153,6 +153,15 @@ export async function executeJob(
     finishedAt = new Date().toISOString();
   }
 
+  // A run that finished without error has still not necessarily delivered anything. The
+  // capability decides, because the answer differs by kind: an empty *search* is a real
+  // answer, an empty *capture* is a miss. `exact` admits no partial settlement — the
+  // buyer signed for one number — so the only honest options are that number or nothing.
+  if (!failure) {
+    const check = deps.adapter.delivered?.(items as never[], quote.params as never);
+    if (check && !check.ok) failure = check.why;
+  }
+
   // Cap and absorb: the buyer signed for the quoted amount and `exact` admits no other
   // number, so an overrun is the seller's cost. The receipt records the plan and the
   // actual work side by side, which is what makes the absorption visible rather than

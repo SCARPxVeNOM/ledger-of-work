@@ -80,6 +80,21 @@ export interface SiteAdapter<Params, Item> {
   precheck?(params: Params): Promise<void>;
   /** Pure. Extracts items from one page of HTML. */
   parse(html: string): Item[];
+  /**
+   * Did this run deliver the thing that was sold?
+   *
+   * Optional, and the default is yes — because for a *search*, finding nothing is an
+   * answer. "No records match that query" is information a buyer may legitimately pay
+   * for, and refusing to charge for it would make the seller's revenue depend on the
+   * world rather than on the work.
+   *
+   * For a *capture* it is the opposite. The buyer named a page and a selector; matching
+   * nothing means we did not capture what they asked for, whatever the reason. Charging
+   * full price for that is charging for nothing, which is what this exists to prevent.
+   *
+   * Return `{ ok: false }` and the job settles nothing and is recorded as failed.
+   */
+  delivered?(items: Item[], params: Params): { ok: true } | { ok: false; why: string };
   /** Drives the browser. Every navigation goes through `ctx.meter.step`. */
   run(ctx: JobContext<import("playwright").Page>, params: Params): Promise<Item[]>;
   /**

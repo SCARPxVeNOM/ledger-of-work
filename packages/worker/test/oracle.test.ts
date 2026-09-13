@@ -153,3 +153,65 @@ describe("oracle parameter validation", () => {
     expect(outline).toContain("screenshot");
   });
 });
+
+describe("a capture that found nothing", () => {
+  /**
+   * The bug this closes, found by buying one.
+   *
+   * A Cloudflare-protected page served a bot challenge. The browser loaded it happily,
+   * the selector matched nothing, and the job settled at full price with a receipt saying
+   * `status: "ok"` and zero items. The receipt was honest — it faithfully recorded that
+   * nothing had been delivered — and the buyer had paid 321,000 tinybar for it.
+   */
+  const params = oracleAdapter.normalise({
+    url: "https://www.whitehouse.gov/presidential-actions/",
+    select: ".wp-block-post-title",
+    max: 3,
+  });
+
+  it("is not a delivery, so it is not charged for", () => {
+    const verdict = oracleAdapter.delivered!([], params);
+
+    expect(verdict.ok).toBe(false);
+  });
+
+  it("says what might have gone wrong, and that nothing was charged", () => {
+    const verdict = oracleAdapter.delivered!([], params);
+
+    expect(verdict.ok).toBe(false);
+    if (verdict.ok) return;
+    // The buyer cannot see our browser, so the message has to carry the possibilities.
+    expect(verdict.why).toContain(".wp-block-post-title");
+    expect(verdict.why).toMatch(/bot challenge|error page/);
+    expect(verdict.why).toContain("Nothing was charged");
+  });
+
+  it("is a delivery the moment anything was captured", () => {
+    expect(oracleAdapter.delivered!([{ rank: 1, value: "something" }], params).ok).toBe(true);
+  });
+});
+
+describe("what the other capabilities do with an empty result", () => {
+  it("leaves searching alone, because finding nothing is an answer", async () => {
+    // "No quotes are tagged xyzzy" is information a buyer may legitimately pay for.
+    // Refusing to charge for it would make revenue depend on the world, not the work —
+    // and would let a buyer get free work by choosing a query with no matches.
+    const { CATALOGUE } = await import("../src/index.js");
+    for (const name of [
+      "quotes.search_and_extract",
+      "virgo.catalogue_search",
+      "govinfo.federal_register_issues",
+    ]) {
+      expect(CATALOGUE[name]!.delivered, `${name} should not override delivered`).toBeUndefined();
+    }
+  });
+
+  it("only the capture capability declares one", async () => {
+    const { CATALOGUE } = await import("../src/index.js");
+    const overriding = Object.entries(CATALOGUE)
+      .filter(([, a]) => a.delivered)
+      .map(([n]) => n);
+
+    expect(overriding).toEqual(["oracle.capture_claim"]);
+  });
+});

@@ -211,6 +211,29 @@ export const oracleAdapter: SiteAdapter<OracleParams, CapturedClaim> = {
     if (!verdict.ok) throw new BadParamsError(verdict.error);
   },
 
+  /**
+   * A capture that matched nothing did not capture anything.
+   *
+   * Found the hard way: a bot-protected site served a challenge page, the browser loaded
+   * it happily, the selector matched nothing, and the job settled at full price with a
+   * receipt recording `status: "ok"` and zero items. The receipt was honest — it faithfully
+   * attested that we had delivered nothing — and the buyer had paid 321,000 tinybar for it.
+   *
+   * The cause does not matter and cannot reliably be told apart anyway: a challenge page,
+   * a redesign, a selector that was always wrong. What matters is that nothing was
+   * delivered, so nothing is charged.
+   */
+  delivered(items: CapturedClaim[], params: OracleParams) {
+    if (items.length > 0) return { ok: true as const };
+    return {
+      ok: false as const,
+      why:
+        `nothing on the page matched \`${params.select}\` — the source may have served a ` +
+        `bot challenge or an error page, or the selector may not match its markup. ` +
+        `Nothing was charged.`,
+    };
+  },
+
   plan(params: OracleParams): Plan {
     const steps = params.click ? 3 : 2;
     return {

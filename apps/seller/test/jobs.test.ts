@@ -215,3 +215,76 @@ describe("publishing a receipt", () => {
     ).rejects.toThrow(/could not be published/);
   });
 });
+
+describe("a job that succeeds but delivers nothing", () => {
+  /**
+   * The defect this closes, found by buying one against a Cloudflare-protected site.
+   *
+   * The run did not throw. A challenge page loaded, the selector matched nothing, and
+   * `items` came back empty — so none of the failure paths above applied, the facilitator
+   * was asked to settle, and the buyer paid 321,000 tinybar for a receipt recording
+   * `status: "ok"` and zero results. Everything worked exactly as written, which is what
+   * made it worth a test rather than a patch.
+   */
+
+  /** Runs clean, returns nothing, and says that is not a delivery. */
+  const emptyCapture = {
+    ...failingAdapter,
+    run: async () => [],
+    delivered: (items: unknown[]) =>
+      items.length > 0
+        ? { ok: true as const }
+        : { ok: false as const, why: "nothing matched the selector. Nothing was charged." },
+  };
+
+  /** The same, without the opinion — a search, where finding nothing is an answer. */
+  const emptySearch = { ...failingAdapter, run: async () => [] };
+
+  const runWith = async (adapter: unknown) => {
+    const pub = fakePublisher();
+    const fac = fakeFacilitator();
+    const out = await executeJob(makeQuote(), {} as never, { asset: "0.0.0" } as never, {
+      ...deps(pub, fac),
+      adapter,
+    });
+    return { out, pub, fac };
+  };
+
+  it("charges nothing", async () => {
+    const { out } = await runWith(emptyCapture);
+
+    expect(out.charged).toBe("0");
+    expect(out.receipt.price.charged).toBe("0");
+  });
+
+  it("never asks the facilitator to settle", async () => {
+    // The strongest form of the assertion: not "we refunded", but "no money moved".
+    const { fac } = await runWith(emptyCapture);
+
+    expect(fac.settle).not.toHaveBeenCalled();
+  });
+
+  it("records the job rather than hiding it", async () => {
+    const { out, pub } = await runWith(emptyCapture);
+
+    expect(pub.published).toHaveLength(1);
+    expect(out.receipt.status).toBe("failed");
+  });
+
+  it("tells the buyer why, since they cannot see our browser", async () => {
+    const { out } = await runWith(emptyCapture);
+
+    expect(out.ok).toBe(false);
+    expect(out.error).toContain("Nothing was charged");
+  });
+
+  it("still charges a search that legitimately found nothing", async () => {
+    // The line this fix must not cross. "No records match that query" is an answer, and
+    // making it free would hand a buyer free work for the price of a bad query.
+    const { out, fac } = await runWith(emptySearch);
+
+    expect(out.charged).toBe("300000");
+    expect(out.receipt.status).toBe("ok");
+    expect(fac.settle).toHaveBeenCalled();
+  });
+});
