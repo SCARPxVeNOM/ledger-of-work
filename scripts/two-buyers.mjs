@@ -3,14 +3,25 @@
  *
  * The project's honest weakness has been that every receipt on the topic was paid for by
  * one account, and that account was the seller's author. A system nobody else has used is
- * a demonstration, not evidence. These are two separate Hedera accounts with their own
- * keys, buying through the two routes a real buyer would take:
+ * a demonstration, not evidence.
  *
- *   Buyer A — the ordinary path: quote, 402, pay, verify.
- *   Buyer B — the agent path: state a budget, negotiate scope, accept, pay, verify.
+ * So this is an acceptance run against the deployed service, from two separate Hedera
+ * accounts with their own keys, covering the paths that matter — including the ones where
+ * the right outcome is that **no money moves**:
  *
- * Keys are read from a file and passed to the child process through the environment.
- * Nothing here prints one, and the file is never read into anything that gets committed.
+ *   1. Buyer A buys through the CLI and verifies the receipt.
+ *   2. Buyer B discovers the service in the on-chain directory, negotiates a budget,
+ *      pays, and verifies.
+ *   3. A source the site's robots.txt disallows is refused before a quote exists.
+ *   4. A capture that matches nothing is refused after the work, and charges zero.
+ *   5. An address that resolves somewhere private is refused outright.
+ *
+ * Balances are read before and after and reconciled against what the receipts claim. That
+ * reconciliation is the point: a test that only checks the happy path cannot tell you
+ * whether the refusals were free or merely quiet.
+ *
+ * Keys travel from the file into the child process through the environment — never argv,
+ * which is visible in a process list, and never stdout. Nothing here prints one.
  *
  *   node scripts/two-buyers.mjs <path-to-accounts.txt> [--only a|b]
  */
@@ -24,7 +35,9 @@ import { spawn } from "node:child_process";
  * useless to anyone else and a standing invitation to leave credentials somewhere
  * predictable; making it required costs one argument and removes both.
  */
-const positional = process.argv.slice(2).filter((v, i, all) => !v.startsWith("--") && all[i - 1] !== "--only");
+const positional = process.argv
+  .slice(2)
+  .filter((v, i, all) => !v.startsWith("--") && all[i - 1] !== "--only");
 const FILE = positional[0] ?? process.env.ACCOUNTS_FILE;
 if (!FILE) {
   console.error(
@@ -40,7 +53,9 @@ if (!FILE) {
   );
   process.exit(2);
 }
+
 const SELLER = process.env.SELLER_URL ?? "https://seller-production-d5ab.up.railway.app";
+const MIRROR = "https://testnet.mirrornode.hedera.com/api/v1";
 
 /** Pull `Account_ID` / `private_key` pairs in the order they appear. */
 function readAccounts(path) {
@@ -66,8 +81,6 @@ function readAccounts(path) {
 function run(command, args, account, label) {
   return new Promise((resolve) => {
     const child = spawn(command, args, {
-      // The key travels in the environment and nowhere else — never argv, which is
-      // visible in a process list, and never stdout.
       env: {
         ...process.env,
         SELLER_URL: SELLER,
@@ -81,13 +94,12 @@ function run(command, args, account, label) {
     const keep = (chunk) => {
       const text = chunk.toString();
       out += text;
-      process.stdout.write(
-        text
-          .split("\n")
-          .map((l) => (l.trim() ? `  ${label} │ ${l}` : ""))
-          .filter(Boolean)
-          .join("\n") + "\n",
-      );
+      const shown = text
+        .split("\n")
+        .filter((l) => l.trim() && !l.startsWith("> ") && !l.includes("ELIFECYCLE"))
+        .map((l) => `  ${label} │ ${l}`)
+        .join("\n");
+      if (shown) process.stdout.write(shown + "\n");
     };
     child.stdout.on("data", keep);
     child.stderr.on("data", keep);
@@ -95,65 +107,155 @@ function run(command, args, account, label) {
   });
 }
 
-const balance = async (id) => {
-  const r = await fetch(`https://testnet.mirrornode.hedera.com/api/v1/accounts/${id}`).then((x) =>
-    x.json(),
-  );
-  return BigInt(r.balance?.balance ?? 0);
+const balance = async (id) =>
+  BigInt((await fetch(`${MIRROR}/accounts/${id}`).then((x) => x.json())).balance?.balance ?? 0);
+
+/** Ask for a quote directly, to exercise refusals that never reach a payment. */
+async function quote(capability, params) {
+  const res = await fetch(`${SELLER}/jobs`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ capability, params }),
+  });
+  return { status: res.status, body: await res.json() };
+}
+
+const rule = (t) => console.log(`\n${`── ${t} `.padEnd(78, "─")}`);
+const checks = [];
+const check = (name, pass, detail = "") => {
+  checks.push({ name, pass });
+  console.log(`  ${pass ? "PASS" : "FAIL"}  ${name}${detail ? ` — ${detail}` : ""}`);
 };
 
-const only = process.argv.includes("--only") ? process.argv[process.argv.indexOf("--only") + 1] : null;
+const only = process.argv.includes("--only")
+  ? process.argv[process.argv.indexOf("--only") + 1]
+  : null;
 const [a, b] = readAccounts(FILE);
+
 console.log(`Buyer A  ${a.accountId}`);
 console.log(`Buyer B  ${b.accountId}`);
-console.log(`Seller   ${SELLER}\n`);
+console.log(`Seller   ${SELLER}`);
 
 const before = { a: await balance(a.accountId), b: await balance(b.accountId) };
 
-// ── Buyer A: the ordinary route ───────────────────────────────────────────────
-console.log("── Buyer A — quote, 402, pay, verify ".padEnd(78, "─"));
-const resultA = only === "b" ? { code: 0 } : await run(
-  "pnpm",
-  [
-    "buy",
-    "--capability",
-    "oracle.capture_claim",
-    "--param",
-    // whitehouse.gov rather than federalregister.gov/documents/current, which the first
-    // run of this script chose and which that site disallows in robots.txt — the policy
-    // refused it correctly, before a quote existed and before anyone was charged.
-    "url=https://www.whitehouse.gov/presidential-actions/",
-    "--param",
-    "select=.wp-block-post-title",
-    "--param",
-    "max=3",
-    "--out",
-    "./buyer-a.json",
-  ],
-  a,
-  "A",
-);
-
-// ── Buyer B: the negotiating agent ────────────────────────────────────────────
-console.log(`\n${"── Buyer B — discover, negotiate a budget, pay, verify ".padEnd(78, "─")}`);
-const resultB = only === "a" ? { code: 0 } : await run(
-  "pnpm",
-  ["agent", "--need", "quotes", "--budget", "400000"],
-  b,
-  "B",
-);
-
-const after = { a: await balance(a.accountId), b: await balance(b.accountId) };
-
-console.log(`\n${"── what each buyer actually spent ".padEnd(78, "─")}`);
-for (const [label, acct, was, now] of [
-  ["A", a.accountId, before.a, after.a],
-  ["B", b.accountId, before.b, after.b],
-]) {
-  const spent = was - now;
-  console.log(`  Buyer ${label}  ${acct}  spent ${spent} tinybar`);
+// ── 1. Buyer A, the ordinary route ────────────────────────────────────────────
+let resultA = { code: 0, out: "" };
+if (only !== "b") {
+  rule("1. Buyer A — quote, 402, pay, verify");
+  resultA = await run(
+    "pnpm",
+    [
+      "buy",
+      "--capability",
+      "oracle.capture_claim",
+      "--param",
+      "url=https://www.whitehouse.gov/presidential-actions/",
+      "--param",
+      "select=.wp-block-post-title",
+      "--param",
+      "max=3",
+      "--out",
+      "./buyer-a.json",
+    ],
+    a,
+    "A",
+  );
+  check("Buyer A completed a paid job", resultA.code === 0);
 }
 
-console.log(
-  `\nexit codes: A=${resultA.code} B=${resultB.code}`,
+// ── 2. Buyer B, discovery and negotiation ─────────────────────────────────────
+let resultB = { code: 0, out: "" };
+if (only !== "a") {
+  rule("2. Buyer B — read the directory, negotiate a budget, pay, verify");
+  resultB = await run("pnpm", ["agent", "--need", "quotes", "--budget", "400000"], b, "B");
+  check("Buyer B negotiated and paid", resultB.code === 0);
+  check(
+    "Buyer B was offered less work rather than a discount",
+    /same published rate, less work/.test(resultB.out),
+  );
+  check(
+    "Buyer B re-priced the counter-offer against the published book",
+    /counter-offer is at the published rate/.test(resultB.out),
+  );
+}
+
+// ── 3. A source the site itself disallows ─────────────────────────────────────
+rule("3. A source robots.txt disallows — refused before a price exists");
+const disallowed = await quote("oracle.capture_claim", {
+  url: "https://www.federalregister.gov/documents/search?q=x",
+  select: "h1",
+  max: 1,
+});
+console.log(`  seller │ ${disallowed.status} ${disallowed.body.message ?? ""}`.trim());
+check(
+  "refused at quote time, quoting the rule",
+  disallowed.status === 400 && /robots\.txt/.test(disallowed.body.message ?? ""),
 );
+
+// ── 4. An address that is not ours to read ────────────────────────────────────
+rule("4. An address that resolves somewhere private — refused outright");
+for (const url of [
+  "https://169.254.169.254/latest/meta-data/",
+  "https://localhost/admin",
+  "https://[::ffff:127.0.0.1]/x",
+]) {
+  const r = await quote("oracle.capture_claim", { url, select: "h1", max: 1 });
+  const refused = r.status === 400;
+  console.log(`  seller │ ${url}`);
+  console.log(`         │ ${r.status} ${(r.body.message ?? "").slice(0, 96)}`);
+  check(`refused ${new URL(url).hostname}`, refused);
+}
+
+// ── 5. A capture that matches nothing ─────────────────────────────────────────
+let zero = { code: 0, out: "" };
+if (only !== "b") {
+  rule("5. A capture that matches nothing — charges zero");
+  zero = await run(
+    "pnpm",
+    [
+      "buy",
+      "--capability",
+      "oracle.capture_claim",
+      "--param",
+      "url=https://www.whitehouse.gov/presidential-actions/",
+      // A selector no page carries, standing in for a bot challenge or a redesign: the
+      // browser loads something, and none of it is what was asked for.
+      "--param",
+      "select=.definitely-not-on-this-page",
+      "--param",
+      "max=1",
+      "--out",
+      "./buyer-a-empty.json",
+    ],
+    a,
+    "A",
+  );
+  check("the job was refused rather than billed", zero.code !== 0);
+  check("the buyer was told nothing was charged", /Nothing was charged/.test(zero.out));
+  check("a receipt was published anyway", /receipt was still published/.test(zero.out));
+}
+
+// ── the reckoning ─────────────────────────────────────────────────────────────
+await new Promise((r) => setTimeout(r, 8000)); // mirror node lag
+const after = { a: await balance(a.accountId), b: await balance(b.accountId) };
+
+rule("what each buyer actually spent");
+const spentA = before.a - after.a;
+const spentB = before.b - after.b;
+console.log(`  Buyer A  ${a.accountId}  ${spentA} tinybar`);
+console.log(`  Buyer B  ${b.accountId}  ${spentB} tinybar`);
+
+if (only !== "b") {
+  // One paid job at 321,000 and one refusal at nothing. Anything more means the empty
+  // capture was billed after all, which is the whole point of step 5.
+  check("Buyer A paid for exactly one job", spentA === 321000n, `${spentA} tinybar`);
+}
+if (only !== "a") {
+  check("Buyer B paid the negotiated price", spentB === 312000n, `${spentB} tinybar`);
+}
+
+rule("result");
+const failed = checks.filter((c) => !c.pass);
+console.log(`  ${checks.length - failed.length}/${checks.length} checks passed`);
+for (const f of failed) console.log(`  FAILED: ${f.name}`);
+process.exit(failed.length ? 1 : 0);

@@ -17,7 +17,7 @@ facilitator on Hedera testnet.
 | **Service** | [seller-production-d5ab.up.railway.app](https://seller-production-d5ab.up.railway.app) | The x402-gated seller. Returns its manifest as JSON to agents, as a page to browsers. |
 | **Buyer** | [web-production-187614.up.railway.app](https://web-production-187614.up.railway.app) | Order a job, watch the meter, pay from your own wallet. |
 | **Verifier** | [verifier-production-0199.up.railway.app](https://verifier-production-0199.up.railway.app) | Check any receipt against the public mirror node. No account, no install. |
-| **Receipts** | [topic `0.0.10413059`](https://hashscan.io/testnet/topic/0.0.10413059) | 54 real jobs, quoted, paid and recorded on chain, by three separate accounts. |
+| **Receipts** | [topic `0.0.10413059`](https://hashscan.io/testnet/topic/0.0.10413059) | 57 receipts — 53 paid jobs from three separate accounts, and 4 recorded but charged nothing. |
 | **Directory** | [topic `0.0.10473320`](https://hashscan.io/testnet/topic/0.0.10473320) | An open agent directory with no submit key — anyone may list. |
 
 ## See it charge you, in one command
@@ -143,26 +143,39 @@ the scope left the audit intact.
 
 ## Two buyers who are not the seller
 
-`node scripts/two-buyers.mjs` runs the whole thing as two separate Hedera accounts, each
-with its own key, through the two routes a real buyer would take:
+`node scripts/two-buyers.mjs <accounts-file>` is an acceptance run against the deployed
+service from two separate Hedera accounts, each with its own key. **13/13 checks**, and
+the paths where the right answer is *no money moves* are checked as hard as the ones where
+it does:
 
 | | Account | Route | Paid | Receipt |
 | --- | --- | --- | --- | --- |
-| **Buyer A** | [`0.0.10513903`](https://hashscan.io/testnet/account/0.0.10513903) | quote → 402 → pay → verify | 321,000 tinybar | [53](https://hashscan.io/testnet/topic/0.0.10413059) — **15/15** |
-| **Buyer B** | [`0.0.10513915`](https://hashscan.io/testnet/account/0.0.10513915) | read directory → negotiate a budget → pay → verify | 312,000 tinybar | [52](https://hashscan.io/testnet/topic/0.0.10413059) — 12/13 |
+| **Buyer A** | [`0.0.10513903`](https://hashscan.io/testnet/account/0.0.10513903) | quote → 402 → pay → verify | 321,000 tinybar | [55](https://hashscan.io/testnet/topic/0.0.10413059) — **15/15** |
+| **Buyer B** | [`0.0.10513915`](https://hashscan.io/testnet/account/0.0.10513915) | read directory → negotiate a budget → pay → verify | 312,000 tinybar | [56](https://hashscan.io/testnet/topic/0.0.10413059) — 12/13 |
 
-Both receipts name their payer, and the ledger agrees with the balances: A is down exactly
-321,000 tinybar and B exactly 312,000. Neither account existed when the seller was built.
+Both receipts name their payer, and the ledger agrees with the balances to the tinybar:
+A is down exactly 321,000 and B exactly 312,000. Neither account existed when the seller
+was built.
 
-The run also caught the policy doing its job. Buyer A first asked for
-`federalregister.gov/documents/current`, and was refused before a quote existed:
+The same run exercises the three refusals, and reconciles the balances afterwards to prove
+each one was free rather than merely quiet:
 
 ```
-quote failed (400): www.federalregister.gov disallows /documents/current
-                    in robots.txt (Disallow: /documents/current)
+robots.txt disallows the path   400  www.federalregister.gov disallows /documents/search
+                                     in robots.txt (Disallow: /documents/search)
+cloud metadata address          400  169.254.169.254 is a link-local, including cloud
+                                     metadata address range and cannot be captured
+localhost                       400  localhost resolves to ::1, a loopback — refusing
+IPv4 loopback inside IPv6       400  ::ffff:7f00:1 is a loopback address range
+                                     (reached through IPv6) and cannot be captured
+a capture that matched nothing  502  nothing on the page matched `.definitely-not-on-this
+                                     -page` … Nothing was charged.
 ```
 
-Nobody was charged, because nothing had been quoted.
+The last one is the one worth reading twice. The job ran, loaded a page, produced a
+receipt — [sequence 57](https://hashscan.io/testnet/topic/0.0.10413059), `status: failed`,
+`charged: 0` — and Buyer A's balance fell by exactly one job's price across the whole run,
+not two.
 
 ## Verification is the point
 
@@ -217,7 +230,7 @@ pictures are of the real thing.
 | Qualification | Where |
 | --- | --- |
 | Live x402-gated service on Hedera, settled through Blocky402 | [the seller](https://seller-production-d5ab.up.railway.app), `apps/seller` — `/health` reports the facilitator |
-| A platform or agent that consumes it, ≥1 real paid request | 54 paid jobs, from three distinct paying accounts, on [topic `0.0.10413059`](https://hashscan.io/testnet/topic/0.0.10413059); `apps/buyer-cli`, `apps/web`, `scripts/agent-discover-and-buy.mjs` |
+| A platform or agent that consumes it, ≥1 real paid request | 53 paid jobs, from three distinct paying accounts, on [topic `0.0.10413059`](https://hashscan.io/testnet/topic/0.0.10413059); `apps/buyer-cli`, `apps/web`, `scripts/agent-discover-and-buy.mjs` |
 | Public repo with setup, architecture and payment flow | this file — [Try it](#try-it), [How it works](#how-it-works) |
 | Demo video ≤ 5 minutes | [`docs/DEMO.md`](docs/DEMO.md) is the script it follows |
 
@@ -227,7 +240,7 @@ pictures are of the real thing.
 | A2A negotiation and settlement | `POST /a2a` — `message/send`, scope negotiated against a budget, settled over x402. See [Negotiating](#negotiating-the-work-not-the-rate) |
 | On-chain agent identity — ERC-8004 or HCS-14 | `packages/identity` — HCS-14 UAID, SHA-384 over six canonical fields |
 | Agent discovery via a directory | [topic `0.0.10473320`](https://hashscan.io/testnet/topic/0.0.10473320), open, no submit key |
-| HTS tokens in the settlement path | 4 of the 54 receipts settle in a `WORK` HTS token rather than HBAR |
+| HTS tokens in the settlement path | 4 of the 57 receipts settle in a `WORK` HTS token rather than HBAR |
 | Verifiable payment audit trails on HCS | the receipts, and [the verifier](https://verifier-production-0199.up.railway.app) that reads them |
 | Recurring payments via Scheduled Transactions | `scripts/standing-order.mjs` — HIP-423, two executed 37 seconds apart |
 
@@ -462,7 +475,7 @@ what it said it would.
 
 ## Status
 
-**Working end to end on Hedera testnet.** Fifty-four real jobs have been quoted, paid
+**Working end to end on Hedera testnet.** Fifty-three paid jobs have been quoted, paid
 for through the Blocky402 facilitator, executed against live sites, receipted on HCS and
 independently verified — across five capabilities, four of them settled in an HTS token
 rather than HBAR, four carrying an independent attestor's signature over the source
