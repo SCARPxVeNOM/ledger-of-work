@@ -134,6 +134,115 @@ const NAV = [
 ];
 
 /**
+ * The other two services, which have their own URLs and are otherwise unfindable.
+ *
+ * The seller and the verifier are separate deployments and a visitor has no way to reach
+ * them from here — the page describes them at length and links to neither. That is a poor
+ * outcome for the verifier in particular: it is the thing a sceptic is supposed to run,
+ * and burying it behind a URL nobody was told undermines the argument it exists to make.
+ */
+const SERVICES = [
+  {
+    href: "https://seller-production-d5ab.up.railway.app",
+    label: "Seller",
+    note: "The service manifest — what is for sale, and the rate card",
+  },
+  {
+    href: "https://verifier-production-0199.up.railway.app",
+    label: "Verifier",
+    note: "Check any receipt. No account, and it never contacts the seller",
+  },
+  {
+    href: "https://hashscan.io/testnet/topic/0.0.10413059",
+    label: "Receipts on HashScan",
+    note: "Every job this service has ever done, on the public ledger",
+  },
+  {
+    href: "https://seller-production-d5ab.up.railway.app/.well-known/agent-card.json",
+    label: "Agent card",
+    note: "The A2A document another agent reads to find and price this",
+  },
+];
+
+/**
+ * A menu of the things that are not on this page.
+ *
+ * Closes on Escape and on a click outside, because a menu that only closes by pressing
+ * the thing that opened it is a menu people end up clicking around. Both listeners are
+ * only attached while it is open — a page-wide mousedown handler that runs on every
+ * click for the life of the page is a real cost for a menu nobody has touched.
+ */
+function ServicesMenu() {
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    const onClick = (e: MouseEvent) => {
+      if (!box.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("mousedown", onClick);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("mousedown", onClick);
+    };
+  }, [open]);
+
+  return (
+    <div ref={box} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-haspopup="menu"
+        className={cx(
+          "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[13.5px] transition-colors",
+          open ? "bg-surface-sunk text-ink" : "text-ink-soft hover:bg-surface-sunk hover:text-ink",
+        )}
+      >
+        Services
+        <span aria-hidden className={cx("text-[9px] transition-transform", open && "rotate-180")}>
+          ▼
+        </span>
+      </button>
+
+      {open && (
+        <div
+          role="menu"
+          className="absolute top-full left-0 z-50 mt-2 w-[330px] rounded-[14px] border border-line bg-surface p-2 shadow-[var(--shadow-lift)]"
+        >
+          {SERVICES.map((s) => (
+            <a
+              key={s.href}
+              role="menuitem"
+              href={s.href}
+              target="_blank"
+              rel="noopener"
+              onClick={() => setOpen(false)}
+              className="block rounded-[10px] px-3 py-2.5 transition-colors hover:bg-surface-sunk"
+            >
+              <span className="flex items-center gap-1.5 text-[13.5px] font-medium text-ink">
+                {s.label}
+                <span aria-hidden className="text-[10px] text-ink-faint">
+                  ↗
+                </span>
+              </span>
+              <span className="mt-0.5 block text-[12px] leading-[1.45] text-ink-faint">
+                {s.note}
+              </span>
+            </a>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
  * Why the wallet did not connect, said where the wallet was asked for.
  *
  * This began life in the page's one shared error banner, which sits under the hero —
@@ -233,6 +342,9 @@ function Nav({
                 </a>
               </li>
             ))}
+            <li>
+              <ServicesMenu />
+            </li>
           </ul>
 
           <div className="relative">
@@ -542,6 +654,24 @@ function Footer({ manifest, usage }: { manifest: Manifest | null; usage: UsageSt
             Proof of what a paid agent delivered. Built for the AI &amp; Agentic Payments on Hedera
             track.
           </p>
+
+          {/* The same links as the nav's Services menu, because that menu lives in a list
+              hidden below the large breakpoint — without these, a visitor on a phone could
+              read the whole argument for the verifier and have no way to open it. */}
+          <ul className="mt-5 flex flex-wrap gap-x-5 gap-y-2">
+            {SERVICES.map((svc) => (
+              <li key={svc.href}>
+                <a
+                  href={svc.href}
+                  target="_blank"
+                  rel="noopener"
+                  className="font-mono text-[12px] text-ink-soft underline decoration-line underline-offset-4 hover:text-ink"
+                >
+                  {svc.label} ↗
+                </a>
+              </li>
+            ))}
+          </ul>
         </div>
         <MetadataRow
           className="md:max-w-[28rem] md:justify-end"
