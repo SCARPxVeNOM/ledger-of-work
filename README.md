@@ -116,30 +116,10 @@ The agent card says so before you start, so nobody wastes a round trip finding o
 "x-negotiation": { "negotiable": ["scope", "asset"], "fixed": ["rate"] }
 ```
 
-`pnpm agent --need quotes --budget 500000` does the whole thing, and
-[receipt 48](https://hashscan.io/testnet/topic/0.0.10413059) is the one it produced:
-
-```
-3. negotiating — telling it the budget rather than guessing
-  asking for    100 records, budget 500000 tinybar
-  asked cost    1572000 tinybar for 100 records
-  offered       456000 tinybar for 20 records
-  rate check    counter-offer is at the published rate
-  agreed        456000 tinybar
-4. paying the 402
-  items         20
-  charged       456000 tinybar
-  receipt       topic 0.0.10413059 seq 48
-5. verifying the receipt against the ledger
-  PASS  Quote follows the published price book   plan {"pages":2,"steps":4} prices at
-                                                 456000 tinybar, receipt quoted 456000
-  VERIFIED — 12/13 checks
-```
-
-The agent does not take the seller's word for the rate: it re-prices the counter-offer
-from the published book itself and refuses the offer if the two disagree. Then the
-verifier checks the same thing again from the receipt, which is the point — negotiating
-the scope left the audit intact.
+`pnpm agent --need quotes --budget 500000` does the whole thing, and does not take the
+seller's word for the rate: it re-prices the counter-offer from the published book itself
+and refuses if the two disagree. The verifier then checks the same thing again from the
+receipt — negotiating the scope left the audit intact, which is the point.
 
 ## Two buyers who are not the seller
 
@@ -225,6 +205,47 @@ Every screenshot above is taken from the deployed services by `pnpm screenshots`
 hand-cropped — so they can be retaken after a redesign, and so a reader can check the
 pictures are of the real thing.
 
+## None of this is really about web jobs
+
+Metered price, hashed evidence, a signed receipt, a verifier that needs nothing from the
+seller — that is a way of paying software for work, and the jobs above are one instance of
+it rather than the point. `@low/gate` packages it so a service with no browser in it can
+charge for what it does and hand its buyer a receipt they can check.
+
+```js
+app.post("/summarise", gate({
+  capability: "text.summarise",
+  book:     PRICE_BOOK,                          // published first
+  price:    (req) => ({ tokens: estimate(req) }),
+  evidence: (out) => ({ output: out.text }),     // hashed, never sent
+  identity: { uaid, key },                       // their key, never ours
+}), handler);
+```
+
+**The adopter signs; a relay pays the Hedera fee and submits to their own topic.** So a
+relay can publish and cannot forge, and an adopter who stops using it keeps every receipt
+they ever wrote. Infrastructure you cannot leave is a platform.
+
+**Not hosted.** Everything else on this page is live and checkable; this is not. The code
+is here with 501 tests and no relay is running. `pnpm toy-adopter` starts a word-count
+service — no Playwright, no adapter, nothing to do with this repository beyond importing
+`@low/gate` — that emits a v4 receipt metered in tokens, signed, with the text itself
+nowhere in it:
+
+```
+POST {"text":"one two three four five"}
+  quoted   1025 tinybar for {tokens: 5}
+  receipt  v4, work={tokens:5}, signed by uaid:aid:toyadopter
+  signature verifies : true
+  one field changed  : false
+
+POST {"text":""}
+  charged 0 — "no words to count. Nothing was charged."
+```
+
+See [the design](docs/superpowers/specs/2026-09-12-settlement-rail-design.md), including
+what it does not solve.
+
 ## How this maps to the track
 
 | Qualification | Where |
@@ -283,29 +304,13 @@ Read this before anything else, because the distinction is the whole product.
 **It does not prove the site was right.** If the source itself was wrong, the receipt
 records a wrong answer perfectly. Nothing here is a fact-checker.
 
-**And until recently it did not prove the seller went to the source at all.** Every hash
-above is taken over something the seller produced, so a seller willing to fabricate an
-answer could hash the fabrication faithfully and pass every check. Two things now stand
-in the way of that:
-
-**The evidence bundle**, on every receipt: a hash of the **fully rendered page** and a
-**full-page screenshot**, with both files handed to the buyer. Faking a job means
-producing a convincing page and a matching screenshot a human can open and look at,
-rather than editing one field in a JSON file. Each is checked independently — flip a
-single bit in the screenshot and that check goes red while the result and page stay
-green. This raises the cost of lying; it does not make lying impossible.
-
-**The retrieval proof**, on capabilities that can carry one: an independent
-[Reclaim](https://reclaimprotocol.org/) attestor opens the TLS session alongside the
-worker and signs that the response from the source contained the answer. This is the only
-commitment on the receipt that is not ours — we cannot forge it, because we do not hold
-the attestor's key. See [Proving retrieval](#proving-retrieval-not-just-delivery).
-
-Even with a proof, the honest claim is **a witness, not mathematics**: "an independent
-attestor observed this TLS session", not "this is unforgeable". Compromise the attestor
-and the signature is worth what any signature from a compromised key is worth. And a
-receipt that carries *no* proof is reported as unproven rather than fine — the verifier
-never treats a missing check as a passing one.
+**It does not prove the seller went to the source.** Every hash above is taken over
+something the seller produced, so a seller willing to fabricate an answer could hash the
+fabrication faithfully. Two things raise the cost of that: an **evidence bundle** — the
+rendered page and a full-page screenshot, hashed independently and handed to the buyer —
+and, where a capability can carry one, a **retrieval proof** signed by an attestor whose
+key we do not hold. See [Proving retrieval](#proving-retrieval-not-just-delivery) and
+[Honest limits](#honest-limits).
 
 ## Why web jobs
 
@@ -390,60 +395,40 @@ the witness is a third party, with everything that implies.
 
 ## Being found, and being paid on a schedule
 
-Four things an agent needs that a manifest alone does not give it.
-
 **A name that is not an address.** The service publishes an
-[HCS-14](https://hol.org/docs/standards/hcs-14/) universal agent id, derived from what it
-*is* — name, version, protocol, Hedera account — and not from where it is hosted. Two
-agents that meet it through different channels compute the same identifier without
-consulting any registry, and it survives a change of host:
+[HCS-14](https://hol.org/docs/standards/hcs-14/) universal agent id — base58 of a SHA-384
+over six canonical fields describing what it *is*, not where it is hosted, so it survives a
+change of host and a stranger derives the same string. The tests recompute it the long way
+rather than asserting our own output, since that is the entire value.
 
-```
-uaid:aid:4Qsy3gHWJbC7GChe8WhWnmFXNLkTpuucn36TW4HgtaQyDU1MgAnEiWhpYsohHGwJ7B
-  ;uid=0;registry=ledger-of-work;proto=a2a;nativeId=hedera:testnet:0.0.10410493
-```
+**A card in the shape other agents read.** `/.well-known/agent-card.json` is generated from
+the same specs the seller prices and executes from, so a skill on the card cannot outlive
+the capability behind it. Each carries a price floor, so an agent can rank providers before
+spending a quote round trip.
 
-Base58 of a SHA-384 over six canonical fields. `packages/identity` computes it, and the
-tests recompute it the long way rather than asserting our own output — the whole value is
-that a stranger derives the same string.
-
-**A card in the shape other agents read.** `/.well-known/agent-card.json` serves an
-[A2A](https://a2a-protocol.org/) agent card, generated from the same specs the seller
-prices and executes from. Each capability becomes a skill with a price floor, so an agent
-can rank providers before spending a quote round trip. It declares `x402` as its interface
-rather than implying an A2A task endpoint it does not serve.
-
-**A directory with nobody in charge.** Services list themselves on an open HCS topic
-([`0.0.10473320`](https://hashscan.io/testnet/topic/0.0.10473320)) that has **no submit
-key** — anyone can add themselves, nobody can delete an entry, and reading it needs no
-account:
+**A directory with nobody in charge.** An open HCS topic
+([`0.0.10473320`](https://hashscan.io/testnet/topic/0.0.10473320)) with **no submit key** —
+anyone may list, nobody can delete, reading needs no account. A directory whose operator you
+had to trust would be a strange thing to put in front of a project claiming you need not
+trust the seller.
 
 ```bash
 pnpm registry list                      # who is out there
 pnpm registry find --skill oracle       # who sells what you need
-pnpm registry publish --url https://…   # add yourself
 ```
 
-A directory you have to trust the operator of would be a strange thing to put in front of
-a project whose claim is that you need not trust the seller. Every entry carries the
-account that posted it; each names the receipts topic where its history can be checked.
-
-**Payment on a schedule, not per call.** x402 settles one job at a time, which suits a
-stranger buying once and suits an agent buying hourly rather badly. `pnpm standing-order`
-creates a run of [Hedera Scheduled
-Transactions](https://docs.hedera.com/learn/core-concepts/transactions/scheduled) — each
-signed now, each executing at its own future second:
+**Payment on a schedule.** `pnpm standing-order` creates [Hedera Scheduled
+Transactions](https://docs.hedera.com/learn/core-concepts/transactions/scheduled), each
+signed now and executing at its own future second:
 
 ```
   1/2  0.0.10473347  executes 2026-09-11T08:49:21Z   ->  EXECUTED
   2/2  0.0.10473349  executes 2026-09-11T08:49:58Z   ->  EXECUTED
 ```
 
-`setWaitForExpiry(true)` is what makes it a standing order rather than a burst: without
-it a single-signature transfer executes the moment it is signed, so all of them fire at
-once. The buyer's funds stay in the buyer's account until each moment arrives, and the
-seller can verify the whole run exists and is signed — over the public mirror node,
-holding nobody's key — before doing any work.
+`setWaitForExpiry(true)` is what makes it a standing order rather than a burst: without it a
+single-signature transfer executes the moment it is signed, so all of them fire at once. The
+buyer's funds stay in the buyer's account until each moment arrives.
 
 ## An agent that finds this and pays it, knowing nothing
 
@@ -475,35 +460,28 @@ what it said it would.
 
 ## Status
 
-**Working end to end on Hedera testnet.** Fifty-three paid jobs have been quoted, paid
-for through the Blocky402 facilitator, executed against live sites, receipted on HCS and
-independently verified — across five capabilities, four of them settled in an HTS token
-rather than HBAR, four carrying an independent attestor's signature over the source
-response, and including one that failed and was charged nothing.
+**Working end to end on Hedera testnet.** Fifty-three paid jobs quoted, paid through the
+Blocky402 facilitator, executed against live sites, receipted on HCS and independently
+verified — across five capabilities, four settled in an HTS token rather than HBAR, four
+carrying an attestor's signature over the source response, and including jobs that failed
+or delivered nothing and were charged zero.
 
-| Component | State |
+| | |
 | --- | --- |
-| `packages/protocol` — receipt schema, canonical hashing, meter, verifier checks | done |
-| `packages/worker` — site adapters, Playwright runtime, work meter | done |
-| Real-site adapters (whitehouse.gov, govinfo.gov, UVa Library Virgo) | done |
-| `packages/proof` — zkTLS retrieval proofs, produced and checked | done |
-| `packages/identity` — HCS-14 agent id, A2A agent card | done |
-| Open service directory on HCS, no submit key | done |
-| Recurring payment via Scheduled Transactions (HIP-423) | done |
-| `packages/receipts` — HCS publisher + mirror-node reader | done |
-| `apps/seller` — x402 resource server | done |
-| `apps/buyer-cli` — buying agent | done |
-| `apps/verifier` — independent verification CLI | done |
-| `apps/wallet` — the buyer's wallet as its own process | done |
-| `apps/mcp` — MCP server for buying agents | done |
-| `apps/web` — demo UI | done |
-| `apps/verify-page` — the verifier as a static page, no backend | done |
-| HTS token as payment asset | done |
-| Agent card on Hedera File Service | done |
+| `packages/protocol` | receipt schema v4, canonical hashing, meter, signing, verifier checks |
+| `packages/worker` | site adapters, Playwright runtime, work meter, robots.txt and address policy |
+| `packages/proof` | zkTLS retrieval proofs, produced and checked |
+| `packages/identity` | HCS-14 agent id, A2A agent card |
+| `packages/receipts` | HCS publisher, mirror-node reader, open directory |
+| `packages/gate` | **not hosted** — take payment and sign a receipt from another service |
+| `apps/seller` | x402 resource server, A2A negotiation at `/a2a` |
+| `apps/buyer-cli`, `apps/verifier`, `apps/wallet`, `apps/mcp` | buying, verifying, signing, and an MCP server for agents |
+| `apps/web`, `apps/verify-page` | the demo UI, and the verifier as a static page with no backend |
+| `apps/relay` | **not hosted** — submits signed receipts it cannot forge |
 
-326 tests, none of which touch the network. The proof tests run against a real attestor
-signature captured on 2026-09-09, because a hand-built fixture cannot tell a valid
-signature from a forged one and every test would pass.
+**501 tests, none of which touch the network.** The proof tests run against a real attestor
+signature captured on 2026-09-09: a hand-built fixture cannot tell a valid signature from a
+forged one, so every test would pass.
 
 ## Evidence
 
@@ -518,16 +496,15 @@ Jobs can also settle in an HTS token ([`0.0.10416991`](https://hashscan.io/testn
 quote becomes 3.12 WORK. An agent holding a stablecoin should not have to hold the
 network's native asset to buy anything.
 
-### A real site with no API at all
+### Real sites, and an honest account of them
 
-`virgo.catalogue_search` searches the University of Virginia Library catalogue. It is the
-only site in [`scripts/survey-sites.mjs`](scripts/survey-sites.mjs) that satisfies the
-whole pitch on its own — run it yourself:
+[`scripts/survey-sites.mjs`](scripts/survey-sites.mjs) checks candidate sites for the two
+properties the pitch depends on. Run it before trusting the marks; it distinguishes
+"checked and absent" from "could not check", which is what makes them worth anything.
 
 ```
 site                          fetchable  crawlable  apiless
 quotes.toscrape.com           yes        yes        no       <- has /api/quotes
-books.toscrape.com            yes        yes        yes      <- adapter since retired
 govinfo.gov                   no         yes        no       <- has api.govinfo.gov
 search.lib.virginia.edu       no         yes        yes*     <- see below
 congress.gov                  no         no         no
@@ -535,58 +512,24 @@ leginfo.legislature.ca.gov    yes        no         yes      <- Disallow: /
 www.gutenberg.org             yes        no         no
 ```
 
-A plain GET of a Virgo search returns a 2,198-byte application shell with no results in
-it, nothing answers at `/catalog.json`, `/api/search`, `?format=json` or
-`/opensearch.xml`, and the site serves no robots.txt at all. Results load by a
-**"Load More Results"** button rather than by URL, so reaching the fortieth record
-genuinely requires clicking — there is no page-2 address to fetch.
+**Virgo** is the closest to the whole pitch. A plain GET of a search returns a 2,198-byte
+application shell with no results in it, and results load by a *"Load More Results"* button
+rather than by URL — there is no page-2 address to fetch. **\*** But watching the network
+shows the Vue front-end calling an internal endpoint, so the honest claim is "no
+*documented public* API", not "no API". The survey checks conventional paths and not XHR
+endpoints, which is a real limitation of it.
 
-**\* Correcting that "apiless" mark.** Watching the network while the page loads shows
-the Vue front-end fetching its results from an internal endpoint
-(`pool-solr-ws-uva-library.internal.lib.virginia.edu/api/search`). So the honest claim is
-"no *documented public* API", not "no API" — the survey checked conventional public
-paths and does not look for XHR endpoints, which is a real limitation of that script.
-Anyone who watches the network can call it directly, so the moat is thinner than the
-table suggests. That same finding is what makes the zkTLS work above tractable.
+**govinfo** is the sharpest demonstration that a single request cannot do this. Its browse
+tree is nested collapsed accordions — year, then month, then day — each loading children
+only when clicked, with no URL that jumps to a month. A plain GET of the same address
+returns 1,762 bytes mentioning neither "Federal Register" nor any issue date; the job
+returns 8 issues with printed page ranges. It disallows `/search/` and this adapter never
+touches it.
 
-Run the survey yourself before trusting that table — it distinguishes "checked and
-absent" from "could not check", which is the distinction that makes the marks worth
-anything.
-
-### A real site, not just a sandbox
-
-`govinfo.federal_register_issues` clicks through the Federal Register browse tree on
-**govinfo.gov** — a real US Government Publishing Office service. It is the sharpest
-demonstration of the whole premise:
-
-```
-plain GET of the same URL      1,762 bytes
-  mentions "Federal Register"  false
-  accordion markup             false
-  any issue dates              false
-
-the job                        8 issues with dates and printed page ranges
-  step 1  open the Federal Register browse tree
-  step 2  expand 2025
-  step 3  expand January
-```
-
-govinfo is an Angular application. The browse tree is nested collapsed accordions —
-year, then month, then day — each loading its children only when clicked, and there is
-no URL that jumps to a month's issue list. A single request cannot produce this result
-no matter how it is constructed.
-
-**robots.txt:** govinfo disallows `/search/`. This adapter never touches it — it uses
-only `/app/collection/...`, which is not disallowed, identifies itself in the user
-agent, and paces its clicks.
-
-**The honest caveat:** govinfo also publishes an official API at `api.govinfo.gov`. So
-this site is a strong example of *"not a fetch"* and a weak example of *"no API"*. It is
-here to prove the adapter interface generalises to a real, JS-rendered government site —
-not to claim the data is otherwise unobtainable. Every genuinely API-less alternative
-examined either disallowed crawling outright (`leginfo.legislature.ca.gov` disallows
-everything; `congress.gov` disallows search and 403s plain clients) or blocked
-unauthenticated readers, which is itself a finding about this market.
+**The caveat both share:** govinfo publishes an official API. So these are strong examples
+of *"not a fetch"* and weak ones of *"no API"*. Every genuinely API-less alternative
+examined either disallowed crawling outright or blocked unauthenticated readers — which is
+itself a finding about this market.
 
 ## Try it
 
