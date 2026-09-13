@@ -11,6 +11,8 @@ export {
   type MirrorClientOptions,
 } from "./mirror.js";
 export {
+  assertNotTrimmedAfterSigning,
+  SignedReceiptTooLarge,
   ReceiptPublisher,
   ReceiptTooLargeError,
   createReceiptTopic,
