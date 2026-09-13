@@ -45,6 +45,14 @@ export interface PriceBook {
   perSecond: string;
   /** Hard cap. A job that would exceed this aborts rather than overrun. */
   ceiling: string;
+  /**
+   * Rates for units beyond the reserved three, keyed by unit name.
+   *
+   * Optional because every price book written before generic metering existed prices
+   * steps, pages and seconds and has nothing else to say. A unit with no rate here is
+   * refused rather than charged nothing — see `price`.
+   */
+  per?: Record<string, string>;
 }
 
 /**

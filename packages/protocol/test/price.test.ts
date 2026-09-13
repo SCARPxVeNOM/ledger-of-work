@@ -68,3 +68,36 @@ describe("the meter", () => {
     expect(() => price({ steps: 0, pages: Number.NaN, sessionMs: 0 }, PRICE_BOOK)).toThrow(/pages/);
   });
 });
+
+describe("pricing a unit the price book names itself", () => {
+  const book = {
+    base: "60000",
+    perStep: "45000",
+    perPage: "90000",
+    perSecond: "9000",
+    ceiling: "6000000",
+    per: { tokens: "5", gpuMs: "2" },
+  };
+
+  it("charges the named rate for a named unit", () => {
+    // base 60000 + 1000 tokens at 5 = 65000
+    expect(price({ tokens: 1000 }, book).total).toBe(65_000n);
+  });
+
+  it("adds named units to the reserved ones rather than replacing them", () => {
+    // base 60000 + 2 steps at 45000 + 1000 tokens at 5 = 155000
+    expect(price({ steps: 2, tokens: 1000 }, book).total).toBe(155_000n);
+  });
+
+  it("prices an existing receipt's work exactly as it did before", () => {
+    // The regression that matters. Receipt 55 records {steps:2, pages:1, sessionMs:343}:
+    // base 60000 + 90000 + 90000 + 9000 = 249000, which is what that receipt says.
+    expect(price({ steps: 2, pages: 1, sessionMs: 343 }, book).total).toBe(249_000n);
+  });
+
+  it("refuses a unit the book does not price, rather than charging zero for it", () => {
+    // Silently charging nothing for an unpriced unit is how a seller gives work away and
+    // never finds out.
+    expect(() => price({ widgets: 10 }, book)).toThrow(/widgets/);
+  });
+});
