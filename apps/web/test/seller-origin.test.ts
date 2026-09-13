@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { belongsToSeller, sellerOrigins } from "../src/main.js";
 
 /**
  * Which run URLs this server will fetch on a buyer's behalf.
@@ -9,20 +10,15 @@ import { describe, expect, it } from "vitest";
  * comparing them turned every "Pay and run" into a 400. Too loose and this becomes an open
  * proxy that will fetch anything a stranger names.
  *
- * The logic is duplicated here rather than imported because `main.ts` starts an HTTP server
- * on import. It is four lines; the alternative is booting a server in a unit test.
+ * This exercises the real function. It used to test a copy, because importing `main.ts`
+ * seized a port — which meant the check the server actually runs was never the check under
+ * test. The server now only listens when it is the program being run, and the allowed set
+ * is a parameter, so the copy is gone.
  */
-const origins = (...urls: string[]) => new Set(urls.map((u) => new URL(u).origin));
-
-function belongsToSeller(runUrl: string, allowed: Set<string>): boolean {
-  try {
-    return allowed.has(new URL(runUrl).origin);
-  } catch {
-    return false;
-  }
-}
-
-const ALLOWED = origins("http://seller.railway.internal:8402", "https://seller-production-d5ab.up.railway.app");
+const ALLOWED = sellerOrigins([
+  "http://seller.railway.internal:8402",
+  "https://seller-production-d5ab.up.railway.app",
+]);
 const check = (u: string) => belongsToSeller(u, ALLOWED);
 
 describe("run urls this server will fetch", () => {

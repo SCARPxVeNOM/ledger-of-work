@@ -2,7 +2,7 @@ import "dotenv/config";
 import { readFileSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { randomUUID } from "node:crypto";
 import {
   buildUnsignedPayment,
@@ -42,15 +42,16 @@ const SELLER = process.env.SELLER_URL ?? "http://localhost:8402";
  * `https://seller-production-d5ab.up.railway.app.evil.example/...`, which is exactly the
  * open-proxy this check exists to prevent.
  */
-const SELLER_ORIGINS = new Set(
-  [SELLER, process.env.SELLER_PUBLIC_URL]
-    .filter((u): u is string => Boolean(u))
-    .map((u) => new URL(u).origin),
-);
+export function sellerOrigins(urls: Array<string | undefined>): Set<string> {
+  return new Set(urls.filter((u): u is string => Boolean(u)).map((u) => new URL(u).origin));
+}
 
-export function belongsToSeller(runUrl: string): boolean {
+const SELLER_ORIGINS = sellerOrigins([SELLER, process.env.SELLER_PUBLIC_URL]);
+
+/** `allowed` is injectable so a test can check the real function against a known set. */
+export function belongsToSeller(runUrl: string, allowed: Set<string> = SELLER_ORIGINS): boolean {
   try {
-    return SELLER_ORIGINS.has(new URL(runUrl).origin);
+    return allowed.has(new URL(runUrl).origin);
   } catch {
     return false;
   }
@@ -133,6 +134,33 @@ function send(res: ServerResponse, status: number, body: unknown): void {
   res.end(JSON.stringify(body));
 }
 
+export type SellerSaid = { error?: string; message?: string } | null;
+
+/**
+ * Turn a seller's refusal into something the buyer can act on.
+ *
+ * The seller usually knows exactly what went wrong and says so: a quote that has aged out
+ * answers `404 unknown_or_expired_quote` with "request a fresh quote". This used to be
+ * reported as `expected 402, got 404` under a 502, which threw away the one sentence the
+ * buyer could have used and blamed the gateway for what was really a clock. Somebody who
+ * spent ninety seconds pairing a wallet then saw "502 Bad Gateway" and had no way to know
+ * the fix was to press the button above.
+ *
+ * So the seller's own words are passed through, and only a seller fault is left as a
+ * gateway failure. A lapsed quote is gone rather than broken — 410 is what lets the page
+ * tell the two apart and quote again on its own.
+ */
+export function sellerRefusal(
+  status: number,
+  said: SellerSaid,
+): { error: string; code?: string | undefined; status: number } {
+  return {
+    error: said?.message ?? said?.error ?? `seller answered ${status}, not a payment challenge`,
+    code: said?.error,
+    status: status === 404 ? 410 : status >= 500 ? 502 : status,
+  };
+}
+
 /**
  * Fetch the 402 and return what it asks for.
  *
@@ -141,7 +169,9 @@ function send(res: ServerResponse, status: number, body: unknown): void {
  */
 async function challenge(
   runUrl: string,
-): Promise<{ accepts: PaymentRequirements } | { error: string; status: number }> {
+): Promise<
+  { accepts: PaymentRequirements } | { error: string; code?: string | undefined; status: number }
+> {
   if (!belongsToSeller(runUrl)) {
     return {
       error: `run url must belong to the configured seller (${[...SELLER_ORIGINS].join(" or ")})`,
@@ -149,7 +179,10 @@ async function challenge(
     };
   }
   const res = await fetch(runUrl, { method: "POST" });
-  if (res.status !== 402) return { error: `expected 402, got ${res.status}`, status: 502 };
+  if (res.status !== 402) {
+    const said = (await res.json().catch(() => null)) as SellerSaid;
+    return sellerRefusal(res.status, said);
+  }
   const { accepts } = (await res.json()) as { accepts: PaymentRequirements[] };
   const first = accepts?.[0];
   if (!first) return { error: "the 402 named no acceptable payment", status: 502 };
@@ -273,7 +306,12 @@ const server = createServer(async (req, res) => {
     if (path === "/api/run" && req.method === "POST") {
       const { runUrl } = (await readJson(req)) as { runUrl: string };
       const requirements = await challenge(runUrl);
-      if ("error" in requirements) return send(res, requirements.status, { error: requirements.error });
+      if ("error" in requirements) {
+        return send(res, requirements.status, {
+          error: requirements.error,
+          code: requirements.code,
+        });
+      }
 
       const header = await signWithWallet(requirements.accepts);
       return settle(res, runUrl, header);
@@ -298,7 +336,7 @@ const server = createServer(async (req, res) => {
       }
 
       const got = await challenge(runUrl);
-      if ("error" in got) return send(res, got.status, { error: got.error });
+      if ("error" in got) return send(res, got.status, { error: got.error, code: got.code });
 
       const unsigned = buildUnsignedPayment(got.accepts, buyerAccountId);
 
@@ -378,7 +416,17 @@ const server = createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, HOST, () => {
-  console.log(`demo UI   http://${HOST}:${PORT}`);
-  console.log(`seller    ${SELLER}`);
-});
+/**
+ * Only seize the port when this file *is* the program.
+ *
+ * Importing a module should not take a port. It did, which meant a unit test could not
+ * reach the routing logic without booting a server — so the origin check was copied into
+ * its test instead of imported, and a copy is the one thing that cannot catch the
+ * original drifting. Two of the bugs this file has shipped lived in exactly that logic.
+ */
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  server.listen(PORT, HOST, () => {
+    console.log(`demo UI   http://${HOST}:${PORT}`);
+    console.log(`seller    ${SELLER}`);
+  });
+}

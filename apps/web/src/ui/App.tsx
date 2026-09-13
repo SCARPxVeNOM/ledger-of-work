@@ -84,6 +84,15 @@ interface RunBody {
   payment: { payer: string; txId?: string };
 }
 
+/**
+ * Refresh a quote this close to lapsing rather than spending it.
+ *
+ * The seller gives a quote five minutes. Paying is not instant — the signature goes to a
+ * phone — so a quote that survives the check must still outlive the approval that follows
+ * it. Twenty seconds is the margin between "worth paying against" and "will 404 mid-flight".
+ */
+const QUOTE_REFRESH_MARGIN_MS = 20_000;
+
 /** Parameter shapes per capability. Declarative, because the manifest publishes no schema. */
 const FIELDS: Record<string, Array<{ k: string; label: string; type: string; def: string | number }>> =
   {
@@ -1049,18 +1058,23 @@ export default function App() {
     }
   }, [connected, demoWallet]);
 
+  /** Ask the seller to price the form as it stands. Throws with the seller's own words. */
+  const fetchQuote = useCallback(async () => {
+    const res = await fetch("/api/quote", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ capability: cap, params: coerce(params), asset }),
+    });
+    const q = await res.json();
+    if (!res.ok) throw new Error(q.message || q.error || "quote failed");
+    return q;
+  }, [cap, params, asset]);
+
   const onQuote = useCallback(async () => {
     setError("");
     setQuoting(true);
     try {
-      const res = await fetch("/api/quote", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ capability: cap, params: coerce(params), asset }),
-      });
-      const q = await res.json();
-      if (!res.ok) throw new Error(q.message || q.error || "quote failed");
-      setQuote(q);
+      setQuote(await fetchQuote());
       setRun(null);
       setChecks(null);
       setVerdict(null);
@@ -1069,7 +1083,7 @@ export default function App() {
     } finally {
       setQuoting(false);
     }
-  }, [cap, params, asset]);
+  }, [fetchQuote]);
 
   const onRun = useCallback(async () => {
     if (!quote) return;
@@ -1084,14 +1098,44 @@ export default function App() {
     setProgress(0);
     setStep({ label: "starting…", done: 0 });
 
-    const book = quote.price.priceBook;
+    // A quote is only good for five minutes, and the seller deletes the job when it
+    // lapses — both the run url and the event stream 404 from then on. Connecting a
+    // wallet can eat most of that window on its own, so the honest failure was for
+    // someone to approve a pairing, tap pay, and be told the gateway was bad.
+    //
+    // Re-quoting is safe here precisely because nothing about the request has changed:
+    // same capability, same form, same published price book, so the same number comes
+    // back. If it does not, that assumption is wrong and the buyer is about to pay a
+    // figure they never saw — so that case stops and shows them the new one.
+    let q = quote;
+    if (Date.parse(q.expiresAt) - Date.now() < QUOTE_REFRESH_MARGIN_MS) {
+      try {
+        setStep({ label: "quote expired — asking for a fresh one…", done: 0 });
+        const fresh = await fetchQuote();
+        setQuote(fresh);
+        if (fresh.price.amount !== q.price.amount) {
+          throw new Error(
+            `the price moved from ${q.price.amount} to ${fresh.price.amount} tinybar while this quote sat. ` +
+              `Nothing was paid — check the new figure and run again.`,
+          );
+        }
+        q = fresh;
+      } catch (e) {
+        setError((e as Error).message);
+        setStep(null);
+        setRunning(false);
+        return;
+      }
+    }
+
+    const book = q.price.priceBook;
     let n = 0;
 
     // The POST goes first. Subscribing before it would race the job's creation of the
     // stream; the stream replays its history to a late subscriber for exactly this reason.
-    const runPromise = payAndRun(quote.run, connected);
+    const runPromise = payAndRun(q.run, connected);
 
-    const es = new EventSource(quote.events);
+    const es = new EventSource(q.events);
     esRef.current = es;
     es.onmessage = (ev) => {
       const e = JSON.parse(ev.data);
@@ -1108,7 +1152,7 @@ export default function App() {
         ]);
         setMeter((m) => ({ ...m, amount: cost.toString() }));
         setStep({ label: e.label, done: e.steps });
-        setProgress(Math.min(0.95, e.steps / Math.max(1, quote.plan.steps)));
+        setProgress(Math.min(0.95, e.steps / Math.max(1, q.plan.steps)));
       }
       if (e.type === "done" || e.type === "failed") es.close();
     };
@@ -1142,7 +1186,7 @@ export default function App() {
       es.close();
       setRunning(false);
     }
-  }, [quote, connected]);
+  }, [quote, connected, fetchQuote]);
 
   const verify = useCallback(
     async (result: unknown, isTampered: boolean) => {
