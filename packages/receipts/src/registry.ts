@@ -1,4 +1,4 @@
-import { canonical, canonicalByteLength, HCS_CHUNK_BYTES } from "@low/protocol";
+import { canonical, canonicalByteLength, HCS_CHUNK_BYTES, type PriceBook } from "@low/protocol";
 import { MirrorClient, type MirrorClientOptions } from "./mirror.js";
 
 /**
@@ -44,6 +44,19 @@ export interface Listing {
   receipts?: string;
   network: string;
   at: string;
+  /**
+   * The public key this identity signs receipts with, DER hex.
+   *
+   * Optional because listings predate signing. A service without one can still be
+   * discovered and bought from; its receipts simply verify on the submitting account, as
+   * they always have.
+   */
+  publicKey?: string;
+  /**
+   * The published price book, so a buyer can check a quote before paying it and a
+   * verifier can check the charge after.
+   */
+  book?: PriceBook;
 }
 
 export class ListingTooLargeError extends Error {
@@ -169,4 +182,31 @@ export function formatDirectory(entries: DirectoryEntry[]): string {
       ].join("\n");
     })
     .join("\n\n");
+}
+
+
+/**
+ * Everything a verifier needs to check a receipt from a seller it has never heard of.
+ *
+ * Returns null rather than a partial answer when the listing is missing a key or a topic.
+ * Handing back a topic with no key invites the caller to verify every claim except the
+ * one saying who wrote it — which, for a receipt that something else relayed, is the
+ * check that matters most.
+ *
+ * Newest listing wins, by sequence number rather than by position: an identity that
+ * re-lists has moved, and callers hand us entries in whichever order they read them.
+ */
+export function resolveSigner(
+  entries: DirectoryEntry[],
+  uaid: string,
+): { topic: string; publicKey: string; book: PriceBook } | null {
+  let best: DirectoryEntry | undefined;
+  for (const entry of entries) {
+    if (entry.listing.uaid !== uaid) continue;
+    if (!best || entry.sequenceNumber > best.sequenceNumber) best = entry;
+  }
+
+  const listing = best?.listing;
+  if (!listing?.publicKey || !listing.receipts || !listing.book) return null;
+  return { topic: listing.receipts, publicKey: listing.publicKey, book: listing.book };
 }

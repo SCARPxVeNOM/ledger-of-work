@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { canonicalByteLength, HCS_CHUNK_BYTES } from "@low/protocol";
-import { buildListing, formatDirectory, readDirectory, type DirectoryEntry } from "../src/registry.js";
+import {
+  buildListing,
+  formatDirectory,
+  readDirectory,
+  resolveSigner,
+  type DirectoryEntry,
+} from "../src/registry.js";
 
 const BASE = {
   uaid: "uaid:aid:4Qsy3gHWJbC7GChe8WhWnmFXNLkTpuucn36TW4HgtaQyDU1MgAnEiWhpYsohHGwJ7B;uid=0;registry=ledger-of-work;proto=a2a;nativeId=hedera:testnet:0.0.10410493",
@@ -170,5 +176,72 @@ describe("folding the topic into a directory", () => {
 
     expect(entries).toHaveLength(1);
     expect(entries[0]?.submitter).toBe("0.0.2");
+  });
+});
+
+describe("resolving a signer from the directory", () => {
+  /**
+   * A relayed receipt is checked on its signature, so a buyer who has never heard of the
+   * seller needs somewhere public to learn which key that should be. The directory
+   * already carries the topic; this is the rest of what a verifier needs.
+   */
+  const listing = {
+    v: 1 as const,
+    kind: "listing" as const,
+    uaid: "uaid:aid:abc",
+    name: "Someone Else",
+    url: "https://elsewhere.example",
+    skills: [{ id: "text.summarise", from: "1000" }],
+    receipts: "0.0.777",
+    network: "hedera:testnet",
+    at: "2026-09-12T00:00:00.000Z",
+    publicKey: "302a300506032b6570032100aa",
+    book: {
+      base: "1000",
+      perStep: "0",
+      perPage: "0",
+      perSecond: "0",
+      ceiling: "9999",
+      per: { tokens: "5" },
+    },
+  };
+  const entry = (over: Partial<DirectoryEntry> = {}): DirectoryEntry =>
+    ({ listing, submitter: "0.0.1", sequenceNumber: 1, at: listing.at, ...over }) as DirectoryEntry;
+
+  it("returns the topic, key and book a verifier needs", () => {
+    expect(resolveSigner([entry()], "uaid:aid:abc")).toEqual({
+      topic: "0.0.777",
+      publicKey: "302a300506032b6570032100aa",
+      book: listing.book,
+    });
+  });
+
+  it("returns null for an identity nobody listed", () => {
+    expect(resolveSigner([entry()], "uaid:aid:nobody")).toBeNull();
+  });
+
+  it("returns null when the listing names no key, rather than a half-answer", () => {
+    // A topic without a key invites a caller to check everything except who wrote it,
+    // which for a relayed receipt is the check that matters most.
+    const { publicKey: _none, ...noKey } = listing;
+    expect(resolveSigner([entry({ listing: noKey as never })], "uaid:aid:abc")).toBeNull();
+  });
+
+  it("returns null when the listing names no receipts topic", () => {
+    const { receipts: _none, ...noTopic } = listing;
+    expect(resolveSigner([entry({ listing: noTopic as never })], "uaid:aid:abc")).toBeNull();
+  });
+
+  it("takes the newest listing when an identity was listed twice", () => {
+    // An identity that re-lists has moved. The fold takes the highest sequence number
+    // rather than the first seen, because the mirror returns messages newest-first.
+    const older = { ...listing, receipts: "0.0.111" };
+    const entries = [
+      entry({ listing: older as never, sequenceNumber: 1 }),
+      entry({ sequenceNumber: 9 }),
+    ];
+
+    expect(resolveSigner(entries, "uaid:aid:abc")?.topic).toBe("0.0.777");
+    expect(resolveSigner(entries.reverse(), "uaid:aid:abc")?.topic).toBe("0.0.777");
   });
 });

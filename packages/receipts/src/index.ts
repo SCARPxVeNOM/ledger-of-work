@@ -29,6 +29,7 @@ export {
   buildListing,
   formatDirectory,
   listingBytes,
+  resolveSigner,
   readDirectory,
   type DirectoryEntry,
   type Listing,

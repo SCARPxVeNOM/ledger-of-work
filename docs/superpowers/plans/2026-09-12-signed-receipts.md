@@ -1,5 +1,9 @@
 # Signed Receipts Implementation Plan
 
+**Status: complete, 2026-09-12.** All seven tasks landed. 470 tests pass; receipts 18 and
+55 on topic `0.0.10413059` still verify 15/15. Plan 2 — `@low/gate` and `apps/relay` — is
+unstarted.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Make a receipt carry its own proof of authorship and describe any metered work, so it can be published by someone other than the seller without weakening what it proves.
@@ -31,7 +35,7 @@
 - Consumes: `HCS_CHUNK_BYTES` from `types.ts`.
 - Produces: `type Work = Record<string, number>`; `RESERVED_UNITS: readonly string[]`; `MAX_UNITS = 4`; `MAX_UNIT_NAME = 12`; `assertValidUnits(work: Work, kind: "unit" | "artifact"): void` throwing `UnitError`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 // packages/protocol/test/units.test.ts
@@ -74,12 +78,12 @@ describe("work unit names", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `npx vitest run packages/protocol/test/units.test.ts`
 Expected: FAIL — `Failed to resolve import "../src/units.js"`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```ts
 // packages/protocol/src/units.ts
@@ -131,12 +135,12 @@ export function assertValidUnits(map: Record<string, number | string>, kind: "un
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run packages/protocol/test/units.test.ts`
 Expected: PASS, 7 tests
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/protocol/src/units.ts packages/protocol/test/units.test.ts
@@ -161,7 +165,7 @@ the topic stops being valid."
 - Consumes: `assertValidUnits` from Task 1.
 - Produces: `PriceBook` gains `per?: Record<string, string>`; `price(work: Record<string, number>, book: PriceBook): PriceBreakdown` accepts named units.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 // append to packages/protocol/test/price.test.ts
@@ -200,12 +204,12 @@ describe("pricing a unit the price book names itself", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `npx vitest run packages/protocol/test/price.test.ts -t "named rate"`
 Expected: FAIL — total is `60000n`, the named unit contributing nothing
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 In `packages/protocol/src/types.ts`, add to `PriceBook`:
 
@@ -263,12 +267,12 @@ export function price(work: Record<string, number>, book: PriceBook): PriceBreak
 
 Add `named: bigint;` to `PriceBreakdown` in `types.ts`.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run packages/protocol`
 Expected: PASS — including every pre-existing price test unchanged
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/protocol/src/price.ts packages/protocol/src/types.ts packages/protocol/test/price.test.ts
@@ -292,7 +296,7 @@ giving work away is a failure the seller would never hear about."
 - Consumes: `assertValidUnits` from Task 1.
 - Produces: `EvidenceRef` becomes `Record<string, string>` of `sha256:` hashes; `Receipt.finalUrl?: string` is a new top-level optional field.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 // packages/protocol/test/evidence.test.ts
@@ -346,12 +350,12 @@ describe("reading evidence off a receipt", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `npx vitest run packages/protocol/test/evidence.test.ts`
 Expected: FAIL — `Failed to resolve import "../src/evidence.js"`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```ts
 // packages/protocol/src/evidence.ts
@@ -396,12 +400,12 @@ In `types.ts`, change `EvidenceRef` to `export type EvidenceRef = Record<string,
   finalUrl?: string;
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run packages/protocol`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/protocol/src/evidence.ts packages/protocol/src/types.ts packages/protocol/test/evidence.test.ts
@@ -425,7 +429,7 @@ field, and readEvidence reads either shape so nothing downstream needs to know."
 - Consumes: `fitsOneChunk`, `canonicalByteLength`, `HCS_CHUNK_BYTES`.
 - Produces: `assertFitsOneChunk(receipt: Receipt): void` throwing `ReceiptTooLarge`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 // append to packages/protocol/test/verify.test.ts
@@ -449,12 +453,12 @@ describe("a receipt too large to publish", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `npx vitest run packages/protocol/test/verify.test.ts -t "too large to publish"`
 Expected: FAIL — `assertFitsOneChunk is not defined`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```ts
 // packages/protocol/src/verify.ts
@@ -492,12 +496,12 @@ export function assertFitsOneChunk(receipt: Receipt): void {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run packages/protocol`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/protocol/src/verify.ts packages/protocol/test/verify.test.ts
@@ -521,7 +525,7 @@ nothing to do. Naming the largest field makes it a decision."
 - Consumes: `canonical` from `canonical.ts`.
 - Produces: `interface Signature { alg: "ed25519" | "ecdsa-secp256k1"; by: string; sig: string }`; `signingBytes(receipt: Receipt): string`; `signReceipt(receipt, { alg, by, sign }): Receipt`; `verifySignature(receipt, verify): boolean`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 // packages/protocol/test/sign.test.ts
@@ -589,12 +593,12 @@ describe("signing a receipt", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `npx vitest run packages/protocol/test/sign.test.ts`
 Expected: FAIL — `Failed to resolve import "../src/sign.js"`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```ts
 // packages/protocol/src/sign.ts
@@ -654,12 +658,12 @@ export function verifySignature(
 
 In `types.ts` add the `Signature` interface and `sig?: Signature;` to `Receipt`, and set `RECEIPT_VERSION = 4` with `SUPPORTED_RECEIPT_VERSIONS = [1, 2, 3, 4]`.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run packages/protocol`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/protocol/src/sign.ts packages/protocol/src/types.ts packages/protocol/test/sign.test.ts
@@ -689,7 +693,7 @@ verify are passed in, because it is shared with a browser."
 - Consumes: `verifySignature` from Task 5.
 - Produces: `VerifyInput` gains `verifySignature?: (bytes: string, sig: string) => boolean` and `expectedSigner?: string`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 // append to packages/protocol/test/verify.test.ts
@@ -755,12 +759,12 @@ describe("who asserted the receipt", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `npx vitest run packages/protocol/test/verify.test.ts -t "who asserted"`
 Expected: FAIL — the signed cases fail because the submitter check still compares `payer_account_id`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Replace check 2 in `verifyReceipt`. The receipt must be parsed before this check, so move the parse block above it, then:
 
@@ -795,12 +799,12 @@ Replace check 2 in `verifyReceipt`. The receipt must be parsed before this check
   }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run`
 Expected: PASS — all 430+ tests, including every existing verifier test
 
-- [ ] **Step 5: Verify against receipts actually on chain**
+- [x] **Step 5: Verify against receipts actually on chain**
 
 Run:
 ```bash
@@ -811,7 +815,7 @@ pnpm verify --topic 0.0.10413059 --seq 18 --result ./samples/result-proof.json \
 ```
 Expected: `VERIFIED — 15/15 checks passed`. If this regresses, the compatibility promise is broken and the task is not done.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add packages/protocol/src/verify.ts packages/protocol/test/verify.test.ts
@@ -839,7 +843,7 @@ sequence 18: still 15/15."
 - Consumes: `Listing`, `DirectoryEntry` from `registry.ts`.
 - Produces: `Listing` gains `publicKey?: string` and `book?: PriceBook`; `resolveSigner(entries: DirectoryEntry[], uaid: string): { topic: string; publicKey: string; book: PriceBook } | null`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 // append to packages/receipts/test/registry.test.ts
@@ -885,12 +889,12 @@ describe("resolving a signer from the directory", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `npx vitest run packages/receipts/test/registry.test.ts -t "resolving a signer"`
 Expected: FAIL — `resolveSigner is not defined`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Add to `Listing` in `registry.ts`:
 
@@ -933,12 +937,12 @@ export function resolveSigner(
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run packages/receipts`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/receipts/src/registry.ts packages/receipts/test/registry.test.ts
