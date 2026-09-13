@@ -173,6 +173,12 @@ importers:
         specifier: ^4.3.3
         version: 4.3.3
 
+  packages/gate:
+    dependencies:
+      '@low/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+
   packages/identity:
     dependencies:
       '@low/protocol':

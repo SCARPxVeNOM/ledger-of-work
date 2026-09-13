@@ -1,0 +1,12 @@
+{
+  "name": "@low/gate",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Take x402 payment and emit a signed receipt, from inside someone else's service.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "dependencies": {
+    "@low/protocol": "workspace:*"
+  }
+}
