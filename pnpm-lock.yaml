@@ -63,6 +63,15 @@ importers:
         specifier: ^17.4.2
         version: 17.4.2
 
+  apps/relay:
+    dependencies:
+      '@low/protocol':
+        specifier: workspace:*
+        version: link:../../packages/protocol
+      '@low/receipts':
+        specifier: workspace:*
+        version: link:../../packages/receipts
+
   apps/seller:
     dependencies:
       '@low/identity':

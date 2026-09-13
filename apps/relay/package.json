@@ -1,0 +1,11 @@
+{
+  "name": "@low/relay",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Submits signed receipts it did not write and cannot forge, paying the fee.",
+  "dependencies": {
+    "@low/protocol": "workspace:*",
+    "@low/receipts": "workspace:*"
+  }
+}
