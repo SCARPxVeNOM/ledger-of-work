@@ -17,7 +17,7 @@ facilitator on Hedera testnet.
 | **Service** | [seller-production-d5ab.up.railway.app](https://seller-production-d5ab.up.railway.app) | The x402-gated seller. Returns its manifest as JSON to agents, as a page to browsers. |
 | **Buyer** | [web-production-187614.up.railway.app](https://web-production-187614.up.railway.app) | Order a job, watch the meter, pay from your own wallet. |
 | **Verifier** | [verifier-production-0199.up.railway.app](https://verifier-production-0199.up.railway.app) | Check any receipt against the public mirror node. No account, no install. |
-| **Receipts** | [topic `0.0.10413059`](https://hashscan.io/testnet/topic/0.0.10413059) | 53 real jobs, quoted, paid and recorded on chain, by three separate accounts. |
+| **Receipts** | [topic `0.0.10413059`](https://hashscan.io/testnet/topic/0.0.10413059) | 54 real jobs, quoted, paid and recorded on chain, by three separate accounts. |
 | **Directory** | [topic `0.0.10473320`](https://hashscan.io/testnet/topic/0.0.10473320) | An open agent directory with no submit key — anyone may list. |
 
 ## See it charge you, in one command
@@ -213,7 +213,7 @@ makes the checks evidence rather than decoration; a single pass/fail could not t
 | Qualification | Where |
 | --- | --- |
 | Live x402-gated service on Hedera, settled through Blocky402 | [the seller](https://seller-production-d5ab.up.railway.app), `apps/seller` — `/health` reports the facilitator |
-| A platform or agent that consumes it, ≥1 real paid request | 53 paid jobs, from three distinct paying accounts, on [topic `0.0.10413059`](https://hashscan.io/testnet/topic/0.0.10413059); `apps/buyer-cli`, `apps/web`, `scripts/agent-discover-and-buy.mjs` |
+| A platform or agent that consumes it, ≥1 real paid request | 54 paid jobs, from three distinct paying accounts, on [topic `0.0.10413059`](https://hashscan.io/testnet/topic/0.0.10413059); `apps/buyer-cli`, `apps/web`, `scripts/agent-discover-and-buy.mjs` |
 | Public repo with setup, architecture and payment flow | this file — [Try it](#try-it), [How it works](#how-it-works) |
 | Demo video ≤ 5 minutes | [`docs/DEMO.md`](docs/DEMO.md) is the script it follows |
 
@@ -223,7 +223,7 @@ makes the checks evidence rather than decoration; a single pass/fail could not t
 | A2A negotiation and settlement | `POST /a2a` — `message/send`, scope negotiated against a budget, settled over x402. See [Negotiating](#negotiating-the-work-not-the-rate) |
 | On-chain agent identity — ERC-8004 or HCS-14 | `packages/identity` — HCS-14 UAID, SHA-384 over six canonical fields |
 | Agent discovery via a directory | [topic `0.0.10473320`](https://hashscan.io/testnet/topic/0.0.10473320), open, no submit key |
-| HTS tokens in the settlement path | 4 of the 53 receipts settle in a `WORK` HTS token rather than HBAR |
+| HTS tokens in the settlement path | 4 of the 54 receipts settle in a `WORK` HTS token rather than HBAR |
 | Verifiable payment audit trails on HCS | the receipts, and [the verifier](https://verifier-production-0199.up.railway.app) that reads them |
 | Recurring payments via Scheduled Transactions | `scripts/standing-order.mjs` — HIP-423, two executed 37 seconds apart |
 
@@ -458,7 +458,7 @@ what it said it would.
 
 ## Status
 
-**Working end to end on Hedera testnet.** Fifty-three real jobs have been quoted, paid
+**Working end to end on Hedera testnet.** Fifty-four real jobs have been quoted, paid
 for through the Blocky402 facilitator, executed against live sites, receipted on HCS and
 independently verified — across five capabilities, four of them settled in an HTS token
 rather than HBAR, four carrying an independent attestor's signature over the source

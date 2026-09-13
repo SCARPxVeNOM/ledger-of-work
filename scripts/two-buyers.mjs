@@ -12,14 +12,34 @@
  * Keys are read from a file and passed to the child process through the environment.
  * Nothing here prints one, and the file is never read into anything that gets committed.
  *
- *   node scripts/two-buyers.mjs [path-to-accounts.txt]
+ *   node scripts/two-buyers.mjs <path-to-accounts.txt> [--only a|b]
  */
 import { readFileSync } from "node:fs";
 import { spawn } from "node:child_process";
 
-/** First bare argument is the accounts file; flags are not it. */
+/**
+ * Where the accounts file lives, from the caller rather than from here.
+ *
+ * No default. A committed script that points at one machine's Downloads folder is both
+ * useless to anyone else and a standing invitation to leave credentials somewhere
+ * predictable; making it required costs one argument and removes both.
+ */
 const positional = process.argv.slice(2).filter((v, i, all) => !v.startsWith("--") && all[i - 1] !== "--only");
-const FILE = positional[0] ?? "C:/Users/aryan/Downloads/test_Accounts.txt";
+const FILE = positional[0] ?? process.env.ACCOUNTS_FILE;
+if (!FILE) {
+  console.error(
+    [
+      "usage: node scripts/two-buyers.mjs <accounts-file> [--only a|b]",
+      "",
+      "The file holds two funded testnet accounts, as:",
+      "  Account_ID=0.0.x",
+      "  private_key=0x…",
+      "",
+      "Keep it outside the repository. Nothing here prints a key.",
+    ].join("\n"),
+  );
+  process.exit(2);
+}
 const SELLER = process.env.SELLER_URL ?? "https://seller-production-d5ab.up.railway.app";
 
 /** Pull `Account_ID` / `private_key` pairs in the order they appear. */
