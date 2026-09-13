@@ -29,6 +29,32 @@ import { CATALOGUE } from "@low/worker";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SELLER = process.env.SELLER_URL ?? "http://localhost:8402";
+/**
+ * Every origin a run URL may legitimately belong to.
+ *
+ * Two, not one, and that is the bug this fixes. `SELLER_URL` is the address *this server*
+ * reaches the seller on — on Railway that is the private network, `seller.railway.internal`.
+ * But a run URL is minted by the seller with its **public** address and travels out to the
+ * browser and back, so comparing the two rejects every real payment with "run url must
+ * belong to the configured seller".
+ *
+ * Compared by origin rather than by prefix. `startsWith` would have accepted
+ * `https://seller-production-d5ab.up.railway.app.evil.example/...`, which is exactly the
+ * open-proxy this check exists to prevent.
+ */
+const SELLER_ORIGINS = new Set(
+  [SELLER, process.env.SELLER_PUBLIC_URL]
+    .filter((u): u is string => Boolean(u))
+    .map((u) => new URL(u).origin),
+);
+
+export function belongsToSeller(runUrl: string): boolean {
+  try {
+    return SELLER_ORIGINS.has(new URL(runUrl).origin);
+  } catch {
+    return false;
+  }
+}
 const PORT = Number(process.env.PORT ?? process.env.WEB_PORT ?? 8403);
 /** See the verifier's server: Node's default bind is not reachable behind a proxy. */
 const HOST = process.env.HOST ?? "0.0.0.0";
@@ -116,8 +142,11 @@ function send(res: ServerResponse, status: number, body: unknown): void {
 async function challenge(
   runUrl: string,
 ): Promise<{ accepts: PaymentRequirements } | { error: string; status: number }> {
-  if (!runUrl?.startsWith(SELLER)) {
-    return { error: "run url must belong to the configured seller", status: 400 };
+  if (!belongsToSeller(runUrl)) {
+    return {
+      error: `run url must belong to the configured seller (${[...SELLER_ORIGINS].join(" or ")})`,
+      status: 400,
+    };
   }
   const res = await fetch(runUrl, { method: "POST" });
   if (res.status !== 402) return { error: `expected 402, got ${res.status}`, status: 502 };
