@@ -221,7 +221,10 @@ function BuiltOnChip({
           alt=""
           width={14}
           height={14}
-          loading="lazy"
+          // Not `loading="lazy"`. These sit inside a transform-animated marquee, and
+          // Chrome never fires the lazy load for an element in one — the images simply
+          // never appear, on screen or off. All seven together are about 7 KB, so there
+          // was nothing to defer in the first place.
           decoding="async"
           className="h-3.5 w-3.5 shrink-0 opacity-70 transition-opacity duration-200 group-hover/chip:opacity-100"
         />
