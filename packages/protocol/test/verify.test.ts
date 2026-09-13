@@ -45,11 +45,14 @@ describe("verifyReceipt — the happy path", () => {
   });
 
   it("reports each claim separately so a failure is diagnosable", () => {
+    // `parse` now precedes `submitter`: deciding who asserted a receipt means reading it
+    // first, because a signed one is judged on its signature rather than on the account
+    // that posted it.
     const out = verifyFixture();
     expect(out.checks.map((c) => c.id)).toEqual([
       "message",
-      "submitter",
       "parse",
+      "submitter",
       "result",
       "page",
       "screenshot",
@@ -571,5 +574,86 @@ describe("a receipt too large to publish", () => {
   it("agrees with fitsOneChunk, rather than being a second opinion", () => {
     expect(fitsOneChunk(oversized())).toBe(false);
     expect(fitsOneChunk(makeReceipt())).toBe(true);
+  });
+});
+
+describe("who asserted the receipt", () => {
+  /**
+   * An unsigned receipt was submitted by its author, and for those the submitting account
+   * is the claim — it is on the message and cannot be forged. A signed receipt may have
+   * been relayed by anyone, so the submitter proves nothing while the signature proves
+   * more. Both paths are kept, chosen by whether the receipt carries a signature, which
+   * is why the 57 receipts already on the topic keep verifying.
+   */
+  const signed = (by = "uaid:aid:abc") => ({
+    ...makeReceipt(),
+    sig: { alg: "ed25519" as const, by, sig: "zzz" },
+  });
+
+  const verifySigned = (over: {
+    expectedSigner?: string;
+    verifySignature?: (bytes: string, sig: string) => boolean;
+    receipt?: Receipt;
+  }) => {
+    const receipt = over.receipt ?? signed();
+    return verifyReceipt({
+      resultHash: hashCanonical(RESULT),
+      message: makeMessage(receipt, { payer_account_id: "0.0.999999" }), // a relay, not the seller
+      transaction: makeTransaction(receipt),
+      expectedSubmitter: SELLER,
+      priceBook: PRICE_BOOK,
+      ...(over.expectedSigner === undefined ? {} : { expectedSigner: over.expectedSigner }),
+      ...(over.verifySignature === undefined ? {} : { verifySignature: over.verifySignature }),
+    });
+  };
+
+  it("checks the submitter when the receipt carries no signature", () => {
+    const check = verifyFixture().checks.find((c) => c.id === "submitter");
+
+    expect(check?.ok).toBe(true);
+    expect(check?.label).toMatch(/submitted by/i);
+  });
+
+  it("checks the signature instead when the receipt carries one", () => {
+    const check = verifySigned({
+      expectedSigner: "uaid:aid:abc",
+      verifySignature: () => true,
+    }).checks.find((c) => c.id === "submitter");
+
+    expect(check?.ok).toBe(true);
+    expect(check?.detail).toMatch(/signed by/i);
+  });
+
+  it("fails a signed receipt whose signature does not verify", () => {
+    const out = verifySigned({ expectedSigner: "uaid:aid:abc", verifySignature: () => false });
+
+    expect(out.ok).toBe(false);
+    expect(out.checks.find((c) => c.id === "submitter")?.ok).toBe(false);
+  });
+
+  it("fails a good signature from the wrong identity", () => {
+    // The signature verifies; the signer is not who the directory says it should be.
+    const out = verifySigned({
+      receipt: signed("uaid:aid:impostor"),
+      expectedSigner: "uaid:aid:abc",
+      verifySignature: () => true,
+    });
+
+    expect(out.checks.find((c) => c.id === "submitter")?.ok).toBe(false);
+  });
+
+  it("does not pass a signed receipt when the caller cannot check signatures", () => {
+    // Silently accepting a signature nobody verified is the failure this whole change
+    // exists to prevent — it would be weaker than the submitter check it replaced.
+    const out = verifySigned({ expectedSigner: "uaid:aid:abc" });
+
+    expect(out.checks.find((c) => c.id === "submitter")?.ok).toBe(false);
+  });
+
+  it("ignores the submitting account entirely for a signed receipt", () => {
+    // Submitted by a relay that is not the seller, and that is fine.
+    const out = verifySigned({ expectedSigner: "uaid:aid:abc", verifySignature: () => true });
+
+    expect(out.checks.find((c) => c.id === "submitter")?.detail).not.toContain("0.0.999999");
   });
 });

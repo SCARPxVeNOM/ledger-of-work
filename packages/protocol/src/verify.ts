@@ -1,6 +1,7 @@
 import { isHbar, tinybarToAssetUnits, type AssetSpec } from "./assets.js";
 import { canonical, canonicalByteLength } from "./canonical.js";
 import { readEvidence } from "./evidence.js";
+import { verifySignature } from "./sign.js";
 import { consensusTimestampToMillis } from "./hedera.js";
 import { price } from "./price.js";
 import {
@@ -77,6 +78,21 @@ export interface VerifyInput {
   message: MirrorTopicMessage;
   /** The account the service is expected to submit receipts from. */
   expectedSubmitter: string;
+  /**
+   * The HCS-14 identity the receipt is expected to be signed by, from the directory.
+   *
+   * Only consulted for a signed receipt. Absent means "any signer will do", which is
+   * right for a caller checking integrity alone and wrong for one checking provenance.
+   */
+  expectedSigner?: string | undefined;
+  /**
+   * Verify a signature over the given bytes.
+   *
+   * Supplied rather than implemented here for the same reason hashing is: it needs a
+   * platform primitive, and this module is shared verbatim between the CLI and a browser.
+   * A signed receipt with no verifier supplied does not pass.
+   */
+  verifySignature?: ((bytes: string, sig: string) => boolean) | undefined;
   /** The published price book for the capability named in the receipt. */
   priceBook?: PriceBook | undefined;
   /**
@@ -139,15 +155,7 @@ export function verifyReceipt(input: VerifyInput): VerifyOutput {
     return { ok: false, checks };
   }
 
-  // 2. Only the service may write to this topic. Without this, anyone can forge a receipt.
-  add(
-    "submitter",
-    "Submitted by the expected service account",
-    input.message.payer_account_id === input.expectedSubmitter,
-    `submitted by ${input.message.payer_account_id}, expected ${input.expectedSubmitter}`,
-  );
-
-  // 3. The payload parses as a receipt we understand.
+  // 2. The payload parses as a receipt we understand.
   let receipt: Receipt;
   try {
     receipt = JSON.parse(decodeBase64Utf8(input.message.message)) as Receipt;
@@ -164,6 +172,43 @@ export function verifyReceipt(input: VerifyInput): VerifyOutput {
     )
   ) {
     return { ok: false, checks, receipt };
+  }
+
+  // 3. Who asserted this?
+  //
+  // An unsigned receipt was submitted by its author, so the submitting account is the
+  // claim: it is on the message and nobody can forge it. A signed receipt may have been
+  // relayed by anyone, so that account proves nothing — and the signature proves more,
+  // being a statement about who stands behind the contents rather than who posted them.
+  //
+  // A signature nobody can check is not accepted. Doing so would make a signed receipt
+  // weaker than the unsigned one it replaced, which is the exact failure this change
+  // exists to avoid.
+  const sig = receipt.sig;
+  if (!sig) {
+    add(
+      "submitter",
+      "Submitted by the expected service account",
+      input.message.payer_account_id === input.expectedSubmitter,
+      `submitted by ${input.message.payer_account_id}, expected ${input.expectedSubmitter}`,
+    );
+  } else {
+    const rightSigner = !input.expectedSigner || sig.by === input.expectedSigner;
+    const verified = input.verifySignature
+      ? verifySignature(receipt, input.verifySignature)
+      : false;
+    add(
+      "submitter",
+      "Signed by the expected service identity",
+      rightSigner && verified,
+      !verified
+        ? input.verifySignature
+          ? `signature does not verify (claimed signer ${sig.by})`
+          : `signed by ${sig.by}, but no way to check the signature was supplied`
+        : rightSigner
+          ? `signed by ${sig.by}`
+          : `signed by ${sig.by}, expected ${input.expectedSigner}`,
+    );
   }
 
   // 4. The integrity claim: the bytes the buyer holds are the bytes that were recorded.
