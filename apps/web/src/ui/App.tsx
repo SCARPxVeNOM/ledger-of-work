@@ -129,6 +129,7 @@ const NAV = [
   { href: "#meter", label: "Meter" },
   { href: "#receipts", label: "Receipts" },
   { href: "#trust", label: "Verification" },
+  { href: "#rail", label: "For builders" },
   { href: "#paper", label: "Write-up" },
 ];
 
@@ -333,6 +334,102 @@ const STEPS = [
   { n: "04", t: "Work is metered", d: "Steps, pages and seconds counted as the browser performs them." },
   { n: "05", t: "Receipt on Hedera", d: "Hashes of the answer, the page and a witness, written to HCS." },
 ];
+
+/**
+ * The part of this that is not about web jobs.
+ *
+ * Everything above sells a service. This says the machinery underneath it is a primitive
+ * other people can use, which is the more interesting claim and the harder one to make
+ * without overstating.
+ *
+ * So it says plainly that nothing here is hosted. Every other section of this page points
+ * at something live that a reader can check in a browser; this one points at a repository.
+ * Blurring that line on the one page arguing you should not have to take our word for
+ * anything would be a poor trade for a slightly better-looking section.
+ */
+function Rail() {
+  return (
+    <section id="rail" className="mx-auto max-w-[1200px] px-6 py-24">
+      <Reveal className="text-center">
+        <SectionLabel className="justify-center">For builders</SectionLabel>
+        <EditorialHeading className="mx-auto mt-4 max-w-[24ch]">
+          None of this is really about <MonoAccent>web jobs.</MonoAccent>
+        </EditorialHeading>
+        <p className="mx-auto mt-6 max-w-[62ch] text-[15px] leading-[1.65] text-ink-soft">
+          Metered price, hashed evidence, a signed receipt on a public ledger, and a verifier
+          that needs nothing from the seller. That is a way of paying software for work, and
+          the jobs above are one example of it rather than the point. It is packaged so a
+          service that has nothing to do with browsers can charge for what it does and hand
+          its buyer a receipt they can check.
+        </p>
+      </Reveal>
+
+      <div className="mt-14 grid gap-6 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
+        <Reveal>
+          <PaperCard dark className="h-full p-6">
+            <span className="font-mono text-[10px] tracking-[0.14em] text-ink-invert/60 uppercase">
+              What an adopter writes
+            </span>
+            <pre className="mt-4 overflow-x-auto font-mono text-[11.5px] leading-[1.7] text-ink-invert/90">
+{`app.post("/summarise", gate({
+  capability: "text.summarise",
+  book:     PRICE_BOOK,            // published first
+  price:    (req) => ({ tokens: estimate(req) }),
+  evidence: (out) => ({ output: out.text }),
+  delivered:(out) => out.text.length > 0
+    ? { ok: true }
+    : { ok: false, why: "nothing was produced" },
+  identity: { uaid, key },         // their key, never ours
+}), handler);`}
+            </pre>
+            <p className="mt-5 text-[13px] leading-[1.6] text-ink-invert/70">
+              Four functions. It prices before the work, settles after it, hashes what the
+              handler declares, and signs with the adopter&rsquo;s own key. Their data never
+              leaves their process — a receipt is hashes and numbers.
+            </p>
+          </PaperCard>
+        </Reveal>
+
+        <Reveal delay={80}>
+          <div className="grid h-full gap-6">
+            <PaperCard className="p-6">
+              <span className="font-mono text-[10px] tracking-[0.14em] text-ink-faint uppercase">
+                What moves, and what cannot
+              </span>
+              <p className="mt-4 text-[14px] leading-[1.6] text-ink-soft">
+                The adopter signs; a relay pays the Hedera fee and submits to{" "}
+                <strong className="font-semibold text-ink">their own topic</strong>. So the
+                relay can publish and cannot forge, and an adopter who stops using it keeps
+                every receipt they ever wrote. Infrastructure you cannot leave is a platform.
+              </p>
+            </PaperCard>
+
+            <PaperCard className="p-6">
+              <span className="font-mono text-[10px] tracking-[0.14em] text-warn uppercase">
+                Not hosted yet
+              </span>
+              <p className="mt-4 text-[14px] leading-[1.6] text-ink-soft">
+                Everything else on this page is live and you can check it. This is not: the
+                gate and the relay are in the repository with 501 tests, and no relay is
+                running. <code className="font-mono text-[12.5px]">pnpm toy-adopter</code>{" "}
+                starts a word-count service with no browser in it that emits a signed receipt
+                you can verify against a key it publishes.
+              </p>
+              <a
+                href="https://github.com/SCARPxVeNOM/ledger-of-work/blob/main/docs/superpowers/specs/2026-09-12-settlement-rail-design.md"
+                target="_blank"
+                rel="noopener"
+                className="mt-4 inline-block font-mono text-[12px] text-accent underline decoration-line underline-offset-4 hover:text-ink"
+              >
+                the design, including what it does not solve →
+              </a>
+            </PaperCard>
+          </div>
+        </Reveal>
+      </div>
+    </section>
+  );
+}
 
 function HowItWorks() {
   return (
@@ -1240,6 +1337,7 @@ export default function App() {
 
         <HowItWorks />
         <Trust />
+        <Rail />
 
         {/* The written argument, for a reader who wants the reasoning rather than the demo.
             The image is the cover; the link goes to the thing itself. */}
