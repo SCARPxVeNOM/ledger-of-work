@@ -15,6 +15,7 @@ import {
 } from "./primitives.js";
 import { nextOriginRefusal } from "../relay-watch.js";
 import { MeterWidget, type MeterLine } from "./MeterWidget.js";
+import { quoteIsStale } from "./quote.js";
 import { AgentBar } from "./AgentBar.js";
 import { Art, FloatingArt } from "./Art.js";
 import {
@@ -83,15 +84,6 @@ interface RunBody {
   price: { unit?: string; quoted: string; charged: string; meteredTinybar?: string };
   payment: { payer: string; txId?: string };
 }
-
-/**
- * Refresh a quote this close to lapsing rather than spending it.
- *
- * The seller gives a quote five minutes. Paying is not instant — the signature goes to a
- * phone — so a quote that survives the check must still outlive the approval that follows
- * it. Twenty seconds is the margin between "worth paying against" and "will 404 mid-flight".
- */
-const QUOTE_REFRESH_MARGIN_MS = 20_000;
 
 /** Parameter shapes per capability. Declarative, because the manifest publishes no schema. */
 const FIELDS: Record<string, Array<{ k: string; label: string; type: string; def: string | number }>> =
@@ -1108,7 +1100,7 @@ export default function App() {
     // back. If it does not, that assumption is wrong and the buyer is about to pay a
     // figure they never saw — so that case stops and shows them the new one.
     let q = quote;
-    if (Date.parse(q.expiresAt) - Date.now() < QUOTE_REFRESH_MARGIN_MS) {
+    if (quoteIsStale(q.expiresAt)) {
       try {
         setStep({ label: "quote expired — asking for a fresh one…", done: 0 });
         const fresh = await fetchQuote();
