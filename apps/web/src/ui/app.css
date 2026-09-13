@@ -46,26 +46,6 @@
   --shadow-soft: 0 1px 2px 0 rgb(59 59 59 / 0.09), 0 2px 4px 0 rgb(59 59 59 / 0.05);
   --shadow-lift: 0 2px 4px 0 rgb(59 59 59 / 0.05), 0 8px 20px -6px rgb(59 59 59 / 0.14);
 
-  /* Marquee keyframes live here; the animation itself is declared below, outside
-     `@theme`, for a reason worth reading before moving it back. */
-
-  @keyframes marquee {
-    from {
-      transform: translateX(0);
-    }
-    to {
-      transform: translateX(calc(-100% - var(--gap)));
-    }
-  }
-  @keyframes marquee-vertical {
-    from {
-      transform: translateY(0);
-    }
-    to {
-      transform: translateY(calc(-100% - var(--gap)));
-    }
-  }
-
   /* Aurora and shiny-text, as Magic UI expects to find them. The aurora keyframe is the
      background-position half of upstream's; its rotate/scale half is fine on a badge and
      wrong on a 5rem headline, which would visibly wobble. */
@@ -198,12 +178,36 @@
  * Declaring it here means `--duration` is substituted at the element that actually defines
  * it. The fallback covers a marquee that sets no duration at all.
  *
+ * The keyframes sit out here too, and that is the second half of the same bug. Tailwind
+ * only emits `@keyframes` it finds inside `@theme` when a matching `--animate-*` variable
+ * is used — so deleting those variables silently deleted the keyframes, and
+ * `animation-name: marquee` then named a rule that no longer existed. The computed style
+ * still read `animation-name: marquee`, `playState: running`; the element simply had zero
+ * animations and `transform: none`.
+ *
  * Longhands rather than the `animation` shorthand, and that is not a style preference.
  * This rule sits outside Tailwind's layers so it wins the cascade — and the shorthand
  * resets every animation longhand it does not mention, including `animation-direction`.
  * Using it silently undid `[animation-direction:reverse]` on the reversed row, so all
  * three travelled the same way and the alternation disappeared.
  */
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(calc(-100% - var(--gap)));
+  }
+}
+@keyframes marquee-vertical {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(calc(-100% - var(--gap)));
+  }
+}
+
 .animate-marquee {
   animation-name: marquee;
   animation-duration: var(--duration, 40s);
