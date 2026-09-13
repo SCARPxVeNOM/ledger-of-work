@@ -9,6 +9,7 @@ export {
 export { canonical, canonicalByteLength } from "./canonical.js";
 export { hashCanonical, sha256 } from "./hash.js";
 export { readEvidence, type ReadEvidence } from "./evidence.js";
+export { signReceipt, signingBytes, verifySignature } from "./sign.js";
 export { assertFitsOneChunk, ReceiptTooLarge } from "./verify.js";
 export {
   assertValidUnits,

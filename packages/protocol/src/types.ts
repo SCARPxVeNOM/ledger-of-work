@@ -5,10 +5,10 @@
  * and verifiable forever, because the alternative to supporting them is a log with a hole
  * in it.
  */
-export const RECEIPT_VERSION = 3;
+export const RECEIPT_VERSION = 4;
 
 /** Versions this build can read. Anything else is refused rather than guessed at. */
-export const SUPPORTED_RECEIPT_VERSIONS = [1, 2, 3] as const;
+export const SUPPORTED_RECEIPT_VERSIONS = [1, 2, 3, 4] as const;
 
 /** HCS caps a single message chunk at 1024 bytes; the REST API does not reassemble chunks. */
 export const HCS_CHUNK_BYTES = 1024;
@@ -64,6 +64,20 @@ export interface PriceBook {
  */
 export type ReceiptKind = "delivery";
 export type JobStatus = "ok" | "partial" | "failed";
+
+/**
+ * Who asserted this receipt, and proof that they did.
+ *
+ * Detached: it covers the receipt without itself. See `sign.ts` for why that distinction
+ * is the whole thing rather than a detail.
+ */
+export interface Signature {
+  alg: "ed25519" | "ecdsa-secp256k1";
+  /** HCS-14 universal agent id of the signer — the name, not the address. */
+  by: string;
+  /** base64url over `signingBytes(receipt)`. */
+  sig: string;
+}
 
 export interface PaymentRef {
   /** CAIP-2 network id, e.g. `hedera:testnet`. */
@@ -208,6 +222,14 @@ export interface Receipt {
    * files, and this is a URL. `readEvidence` reads either placement.
    */
   finalUrl?: string;
+  /**
+   * Proof of who asserted this, for receipts that were not submitted by their author.
+   *
+   * Absent on v1 through v3, where the seller submitted its own receipts and the
+   * submitting account was therefore the claim. A verifier checks the submitter when this
+   * is absent and the signature when it is present — see `verify.ts`.
+   */
+  sig?: Signature;
   status: JobStatus;
 }
 
