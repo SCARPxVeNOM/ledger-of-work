@@ -46,9 +46,8 @@
   --shadow-soft: 0 1px 2px 0 rgb(59 59 59 / 0.09), 0 2px 4px 0 rgb(59 59 59 / 0.05);
   --shadow-lift: 0 2px 4px 0 rgb(59 59 59 / 0.05), 0 8px 20px -6px rgb(59 59 59 / 0.14);
 
-  /* Marquee, as Magic UI expects to find it. */
-  --animate-marquee: marquee var(--duration) linear infinite;
-  --animate-marquee-vertical: marquee-vertical var(--duration) linear infinite;
+  /* Marquee keyframes live here; the animation itself is declared below, outside
+     `@theme`, for a reason worth reading before moving it back. */
 
   @keyframes marquee {
     from {
@@ -182,6 +181,30 @@
   }
 }
 
+/**
+ * The marquee animation, declared here rather than as an `--animate-*` theme variable.
+ *
+ * Tailwind turns `--animate-marquee` into `.animate-marquee { animation: var(--animate-marquee) }`,
+ * and the variable itself lives on `:root`. That is the problem: its value is
+ * `marquee var(--duration) linear infinite`, and `--duration` is set per row, not on
+ * `:root`. A custom property whose `var()` cannot resolve is invalid at computed-value
+ * time, so `--animate-marquee` computed to nothing at the root and *inherited* that
+ * nothing — every marquee on the page resolved to `animation: none`.
+ *
+ * It failed silently and completely: the rows rendered, the chips were right, the reverse
+ * direction was applied to the middle row, and nothing moved. The receipts strip further
+ * down the page had never animated either.
+ *
+ * Declaring `animation` directly means `--duration` is substituted at the element that
+ * actually defines it. The fallback covers a marquee that sets no duration at all.
+ */
+.animate-marquee {
+  animation: marquee var(--duration, 40s) linear infinite;
+}
+.animate-marquee-vertical {
+  animation: marquee-vertical var(--duration, 40s) linear infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .reveal,
   .reveal.shown {
@@ -191,7 +214,9 @@
   }
   .ticking,
   .print-in,
-  .stamp-in {
+  .stamp-in,
+  .animate-marquee,
+  .animate-marquee-vertical {
     animation: none;
   }
 }
