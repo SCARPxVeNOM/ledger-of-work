@@ -85,6 +85,28 @@ interface RunBody {
   payment: { payer: string; txId?: string };
 }
 
+/**
+ * Put the page back on the section the URL asked for.
+ *
+ * A deep link like `/#receipts` is resolved by the browser the moment the document is
+ * ready, which is before `/api/usage` has answered — so it scrolls to a section that is
+ * still empty. When the numbers arrive the section grows and pushes its own contents below
+ * the fold, and because nobody scrolled, the counters were never seen: `useInView` stayed
+ * false and the page showed "0 Jobs" beside a per-capability breakdown reading 38, 13, 4.
+ *
+ * Re-applying the hash after the content lands is the fix, rather than weakening the
+ * in-view rule — the counters should still count up when they are reached by scrolling,
+ * which is the whole effect.
+ */
+function restoreHashPosition(): void {
+  const id = location.hash.slice(1);
+  if (!id) return;
+  // After paint, so the section has its final height before we measure it.
+  requestAnimationFrame(() => {
+    document.getElementById(id)?.scrollIntoView();
+  });
+}
+
 /** Parameter shapes per capability. Declarative, because the manifest publishes no schema. */
 const FIELDS: Record<string, Array<{ k: string; label: string; type: string; def: string | number }>> =
   {
@@ -975,7 +997,10 @@ export default function App() {
       }
       try {
         const u = await fetch("/api/usage").then((r) => r.json());
-        if (u.available && u.jobs) setUsage(u);
+        if (u.available && u.jobs) {
+          setUsage(u);
+          restoreHashPosition();
+        }
       } catch {
         /* usage is supplementary; its absence must not break the demo */
       }
