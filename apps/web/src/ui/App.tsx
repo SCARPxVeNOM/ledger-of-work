@@ -652,9 +652,14 @@ function Rail() {
         </p>
       </Reveal>
 
+      {/* `min-w-0` on the grid children is load-bearing, not tidiness. A grid item
+          defaults to min-width:auto, so it refuses to shrink below its content — the code
+          block below has long lines and `overflow-x-auto`, and without this the item grows
+          to fit them instead of letting the pre scroll. On a 390px phone that pushed the
+          whole page 89px wide and the entire site scrolled sideways. */}
       <div className="mt-14 grid gap-6 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
-        <Reveal>
-          <PaperCard dark className="h-full p-6">
+        <Reveal className="min-w-0">
+          <PaperCard dark className="h-full min-w-0 p-6">
             <span className="font-mono text-[10px] tracking-[0.14em] text-ink-invert/60 uppercase">
               What an adopter writes
             </span>
@@ -678,9 +683,9 @@ function Rail() {
           </PaperCard>
         </Reveal>
 
-        <Reveal delay={80}>
-          <div className="grid h-full gap-6">
-            <PaperCard className="p-6">
+        <Reveal delay={80} className="min-w-0">
+          <div className="grid h-full min-w-0 gap-6">
+            <PaperCard className="min-w-0 p-6">
               <span className="font-mono text-[10px] tracking-[0.14em] text-ink-faint uppercase">
                 What moves, and what cannot
               </span>
