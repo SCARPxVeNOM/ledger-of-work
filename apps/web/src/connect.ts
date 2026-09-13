@@ -55,44 +55,115 @@ function trace(stage: string, detail?: unknown): void {
   console.info(`[wallet] ${String(Date.now() - t0).padStart(5)}ms  ${stage}`, detail ?? "");
 }
 
-/** Build the connector once. Calling `init` twice opens two sign clients. */
-async function getConnector(): Promise<DAppConnector> {
-  if (connector) return connector;
-  trace("constructing connector");
-  const c = new DAppConnector(
-    METADATA,
-    LedgerId.TESTNET,
-    PROJECT_ID,
-    // Only the one method is requested. A wallet prompt that asks for the ability to
-    // *execute* transactions when the dApp only ever needs a signature is asking for
-    // more than it needs, and a careful user is right to refuse it.
-    ["hedera_signTransaction"],
-    ["chainChanged", "accountsChanged"],
-    ["hedera:testnet"],
+/**
+ * Drop pairings that outlived the tab which made them.
+ *
+ * Pairings are kept in localStorage, so a visitor who closes the tab without disconnecting
+ * leaves them behind. The next load restores them and subscribes to their topics, and the
+ * relay then delivers traffic for a peer that is long gone — which is how a page that has
+ * done nothing yet still reports `Pending session not found for topic` and
+ * `No matching key. proposal:` before anyone has touched the button.
+ *
+ * Only the dead ones. An active pairing that has not expired is a wallet the visitor may
+ * still be paired with, and dropping it would demand a fresh QR scan for no reason.
+ *
+ * Expiries are unix **seconds** here, not milliseconds.
+ */
+async function pruneStalePairings(c: DAppConnector): Promise<void> {
+  const pairing = c.walletConnectClient?.core?.pairing;
+  if (!pairing) return;
+
+  const now = Math.floor(Date.now() / 1000);
+  const stale = pairing.getPairings().filter((p) => !p.active || p.expiry <= now);
+  if (!stale.length) return;
+
+  trace(`pruning ${stale.length} stale pairing(s)`);
+  await Promise.all(
+    stale.map((p) =>
+      pairing.disconnect({ topic: p.topic }).catch(() => {
+        /* already gone — the point was that it should not be here */
+      }),
+    ),
   );
-  // `init` opens the sign client and its relay socket. If the project id is rejected,
-  // this is where it surfaces.
-  trace("init: opening sign client");
-  try {
-    await c.init({ logger: "error" });
-  } catch (err) {
-    trace("init: FAILED", (err as Error).message);
-    throw err;
-  }
-  trace("init: ok");
-  connector = c;
-  return c;
 }
 
 /**
- * Throw away the cached connector.
+ * The build in progress, if there is one.
  *
- * After the relay refuses the origin, the connector is holding a relayer that will go on
- * reconnecting to a socket it can never keep. Fixing the allowlist and pressing the
- * button again has to build a fresh one, or it simply rejoins the old retry loop.
+ * Two clicks land before the first `init` resolves and both see an empty `connector`, so
+ * both construct one — and the loser's is never referenced again but goes on running.
+ * Sharing the promise makes concurrent callers wait for the same connector instead.
+ */
+let building: Promise<DAppConnector> | undefined;
+
+/** Build the connector once. Calling `init` twice opens two sign clients. */
+async function getConnector(): Promise<DAppConnector> {
+  if (connector) return connector;
+  if (building) return building;
+
+  building = (async () => {
+    trace("constructing connector");
+    const c = new DAppConnector(
+      METADATA,
+      LedgerId.TESTNET,
+      PROJECT_ID,
+      // Only the one method is requested. A wallet prompt that asks for the ability to
+      // *execute* transactions when the dApp only ever needs a signature is asking for
+      // more than it needs, and a careful user is right to refuse it.
+      ["hedera_signTransaction"],
+      ["chainChanged", "accountsChanged"],
+      ["hedera:testnet"],
+    );
+    // `init` opens the sign client and its relay socket. If the project id is rejected,
+    // this is where it surfaces.
+    trace("init: opening sign client");
+    try {
+      await c.init({ logger: "error" });
+    } catch (err) {
+      trace("init: FAILED", (err as Error).message);
+      throw err;
+    }
+    trace("init: ok");
+    await pruneStalePairings(c);
+    connector = c;
+    return c;
+  })();
+
+  try {
+    return await building;
+  } finally {
+    // Cleared either way. A failed init must not be cached as the answer forever.
+    building = undefined;
+  }
+}
+
+/**
+ * Close the relay socket and forget the connector.
+ *
+ * Dropping the reference alone was the bug behind every wallet error in the console.
+ * `disconnectAll` ends the *sessions*; it does not close the sign client's socket or
+ * unsubscribe it, so an abandoned connector keeps listening on topics whose state went
+ * with it. The relay then delivers messages it can no longer place — `Pending session not
+ * found for topic`, `No matching key. proposal:`, `failed to process an inbound msg` —
+ * and because the old Core is still registered, building the replacement announces
+ * `Init() was called 2 times`.
+ *
+ * So the socket is closed before the reference goes. Kept synchronous for its callers:
+ * they are handling an error and have nothing to do with the outcome, and a teardown that
+ * fails must not become a second error on top of the first.
  */
 export function resetConnector(): void {
+  const old = connector;
   connector = undefined;
+  building = undefined;
+  if (!old) return;
+
+  trace("resetConnector: closing relay transport");
+  void Promise.resolve()
+    .then(() => old.walletConnectClient?.core?.relayer?.transportClose())
+    .catch(() => {
+      /* already down, or never opened; either way there is nothing left to close */
+    });
 }
 
 /** Raised when the visitor dismisses the wallet modal. Not a fault; the caller says so. */
@@ -158,11 +229,23 @@ export async function connectWallet(timeoutMs = 60_000): Promise<Connection> {
 
   return {
     accountId,
+    /**
+     * End the session, and keep the connector.
+     *
+     * It used to drop the connector too, which is what made reconnecting noisy: the next
+     * click built a second one, the first was never torn down, and the two Cores produced
+     * `Init() was called 2 times` followed by relay traffic the survivor could not place.
+     *
+     * Nothing about the connector is session-specific — it is a client and a socket, and
+     * reusing it is what the library expects. The session is the thing being ended, and
+     * `disconnectAll` ends it and its pairings, which is the whole of what disconnect means
+     * here. A page that connects, disconnects and connects again now opens exactly one.
+     */
     disconnect: async () => {
       await c.disconnectAll().catch(() => {
         /* already gone; nothing to clean up */
       });
-      connector = undefined;
+      trace("disconnected; connector kept for the next connect");
     },
   };
 }
